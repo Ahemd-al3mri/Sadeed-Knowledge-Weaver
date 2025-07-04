@@ -10,6 +10,7 @@ import { Logo } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
@@ -30,6 +31,7 @@ export default function Home() {
   const [documents, setDocuments] = useState<ProcessedDocument[]>([]);
   const [selectedDocId, setSelectedDocId] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [updatingChunkIndex, setUpdatingChunkIndex] = useState<number | null>(null);
   const { toast } = useToast();
 
   const selectedDocument = useMemo(() => {
@@ -126,6 +128,55 @@ export default function Home() {
       doc.id === id ? { ...doc, metadata: { ...doc.metadata, [field]: value } } : doc
     ));
   };
+
+  const handleChunkBlur = useCallback(async (docId: string, chunkIndex: number, newText: string) => {
+    const doc = documents.find(d => d.id === docId);
+    if (!doc || !doc.chunks || !doc.embeddings) return;
+
+    if (doc.chunks[chunkIndex] === newText) {
+      return;
+    }
+
+    setUpdatingChunkIndex(chunkIndex);
+
+    try {
+      const newChunks = [...doc.chunks];
+      newChunks[chunkIndex] = newText;
+      setDocuments(prev => prev.map(d => d.id === docId ? { ...d, chunks: newChunks } : d));
+
+      const newEmbeddingsArray = await runEmbedding([newText]);
+      if (!newEmbeddingsArray || newEmbeddingsArray.length === 0) {
+        throw new Error('Failed to generate new embedding.');
+      }
+      const newEmbedding = newEmbeddingsArray[0];
+      
+      setDocuments(prev => prev.map(d => {
+        if (d.id === docId && d.embeddings) {
+          const updatedEmbeddings = [...d.embeddings];
+          updatedEmbeddings[chunkIndex] = newEmbedding;
+          return { ...d, embeddings: updatedEmbeddings };
+        }
+        return d;
+      }));
+
+      toast({
+        title: "نجاح",
+        description: `تم تحديث وحدة المعرفة #${chunkIndex + 1} بنجاح.`,
+      });
+
+    } catch (error) {
+      console.error('Failed to update chunk:', error);
+      setDocuments(prev => prev.map(d => d.id === docId ? { ...d, chunks: doc.chunks } : d));
+      toast({
+        variant: "destructive",
+        title: "فشل التحديث",
+        description: error instanceof Error ? error.message : "An unknown error occurred.",
+      });
+    } finally {
+      setUpdatingChunkIndex(null);
+    }
+  }, [documents, toast]);
+
 
   const handleExport = () => {
     const completedDocs = documents.filter(doc => doc.status === 'completed');
@@ -354,8 +405,23 @@ export default function Home() {
                       <AccordionContent>
                         <ScrollArea className="h-80 mt-2 p-3 border rounded-md bg-muted/50">
                           {selectedDocument.status === 'completed' && selectedDocument.chunks?.map((chunk, index) => (
-                            <div key={index} className="p-3 mb-2 bg-background rounded-md shadow-sm">
-                              <p className="text-sm leading-relaxed">{chunk}</p>
+                            <div key={index} className="p-3 mb-2 bg-background rounded-md shadow-sm relative group">
+                              <Label htmlFor={`chunk-${index}`} className="text-xs text-muted-foreground">وحدة المعرفة #{index + 1}</Label>
+                              <Textarea
+                                id={`chunk-${index}`}
+                                defaultValue={chunk}
+                                onBlur={(e) => handleChunkBlur(selectedDocument.id, index, e.target.value)}
+                                disabled={updatingChunkIndex !== null}
+                                className="w-full mt-1 min-h-[100px] leading-relaxed bg-background disabled:opacity-80 disabled:cursor-not-allowed"
+                              />
+                              {updatingChunkIndex === index && (
+                                <div className="absolute top-4 right-4 flex items-center justify-center bg-background/80 w-[calc(100%-2rem)] h-[calc(100%-2rem)]">
+                                  <div className="flex items-center gap-2 text-sm text-primary">
+                                    <Loader className="h-4 w-4 animate-spin" />
+                                    ...جاري تحديث التضمين
+                                  </div>
+                                </div>
+                              )}
                             </div>
                           ))}
                           {selectedDocument.status !== 'completed' && <p className="text-sm text-center text-muted-foreground">ستظهر المقاطع هنا بعد اكتمال المعالجة.</p>}
