@@ -4,6 +4,7 @@ import { ocrProcessing } from '@/ai/flows/ocr-processing';
 import { identifyDocumentType } from '@/ai/flows/auto-document-type-identification';
 import { intelligentChunking } from '@/ai/flows/intelligent-chunking';
 import { generateEmbeddings } from '@/ai/flows/embedding-generation';
+import { extractMetadata } from '@/ai/flows/metadata-extraction';
 
 export async function runOcr(fileDataUri: string) {
   try {
@@ -28,6 +29,17 @@ export async function runDocTypeIdentification(documentText: string) {
   } catch (e) {
     console.error('Document Type Identification failed:', e);
     throw new Error('Failed to identify document type.');
+  }
+}
+
+export async function runMetadataExtraction(documentText: string) {
+  try {
+    const result = await extractMetadata({ documentText });
+    return result;
+  } catch (e) {
+    console.error('Metadata Extraction failed:', e);
+    // This is not a critical failure, so we don't throw. Return empty object.
+    return { title: '', articleNumber: '', date: '', section: '', issuedBy: '', keywords: [] };
   }
 }
 

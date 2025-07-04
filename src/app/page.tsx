@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useCallback, type ChangeEvent, type DragEvent } from 'react';
 import { v4 as uuidv4 } from 'uuid';
-import { runOcr, runDocTypeIdentification, runChunking, runEmbedding } from '@/lib/actions';
+import { runOcr, runDocTypeIdentification, runMetadataExtraction, runChunking, runEmbedding } from '@/lib/actions';
 import type { ProcessedDocument, ProcessingStatus } from '@/lib/types';
 import { cn } from '@/lib/utils';
 import { useToast } from "@/hooks/use-toast";
@@ -15,7 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
-import { UploadCloud, FileText, Loader, CheckCircle2, XCircle, Download, BookText, Tags } from 'lucide-react';
+import { UploadCloud, FileText, Loader, CheckCircle2, XCircle, Download, BookText, Tags, Key, Building } from 'lucide-react';
 
 const fileToDataUri = (file: File): Promise<string> => {
   return new Promise((resolve, reject) => {
@@ -42,32 +42,46 @@ export default function Home() {
 
     try {
       // 1. OCR
-      setDocuments(prev => prev.map(d => d.id === docId ? { ...d, status: 'ocr', statusMessage: 'Extracting text...' } : d));
+      setDocuments(prev => prev.map(d => d.id === docId ? { ...d, status: 'ocr', statusMessage: '...جاري استخراج النص' } : d));
       const dataUri = await fileToDataUri(doc.file);
       const ocrResult = await runOcr(dataUri);
       const extractedText = ocrResult.extractedText;
       setDocuments(prev => prev.map(d => d.id === docId ? { ...d, extractedText } : d));
 
       // 2. Identification
-      setDocuments(prev => prev.map(d => d.id === docId ? { ...d, status: 'identification', statusMessage: 'Identifying document type...' } : d));
+      setDocuments(prev => prev.map(d => d.id === docId ? { ...d, status: 'identification', statusMessage: '...جاري تحديد نوع المستند' } : d));
       const idResult = await runDocTypeIdentification(extractedText);
       const { documentType, confidence } = idResult;
+      
+      // 3. Metadata Extraction
+      setDocuments(prev => prev.map(d => d.id === docId ? { ...d, status: 'metadata', statusMessage: '...جاري استخراج البيانات الوصفية' } : d));
+      const extractedMetadata = await runMetadataExtraction(extractedText);
+
       setDocuments(prev => prev.map(d => d.id === docId ? {
         ...d,
         identifiedType: documentType,
         typeConfidence: confidence,
-        metadata: { ...d.metadata, namespace: documentType || 'Uncategorized' }
+        metadata: {
+          ...d.metadata,
+          namespace: documentType || 'غير مصنف',
+          title: extractedMetadata.title || '',
+          articleNumber: extractedMetadata.articleNumber || '',
+          date: extractedMetadata.date || '',
+          section: extractedMetadata.section || '',
+          issuedBy: extractedMetadata.issuedBy || '',
+          keywords: extractedMetadata.keywords || [],
+        }
       } : d));
 
-      // 3. Chunking
-      setDocuments(prev => prev.map(d => d.id === docId ? { ...d, status: 'chunking', statusMessage: 'Segmenting content...' } : d));
+      // 4. Chunking
+      setDocuments(prev => prev.map(d => d.id === docId ? { ...d, status: 'chunking', statusMessage: '...جاري تقطيع المحتوى' } : d));
       const chunks = await runChunking(extractedText, documentType);
       setDocuments(prev => prev.map(d => d.id === docId ? { ...d, chunks } : d));
 
-      // 4. Embedding
-      setDocuments(prev => prev.map(d => d.id === docId ? { ...d, status: 'embedding', statusMessage: 'Generating embeddings...' } : d));
+      // 5. Embedding
+      setDocuments(prev => prev.map(d => d.id === docId ? { ...d, status: 'embedding', statusMessage: '...جاري إنشاء التضمينات' } : d));
       const embeddings = await runEmbedding(chunks);
-      setDocuments(prev => prev.map(d => d.id === docId ? { ...d, embeddings, status: 'completed', statusMessage: 'Processing complete.' } : d));
+      setDocuments(prev => prev.map(d => d.id === docId ? { ...d, embeddings, status: 'completed', statusMessage: 'اكتملت المعالجة.' } : d));
 
     } catch (error) {
       console.error('Processing failed:', error);
@@ -82,8 +96,8 @@ export default function Home() {
       id: uuidv4(),
       file,
       status: 'pending',
-      statusMessage: 'Ready to process',
-      metadata: { namespace: 'laws', documentNumber: '', date: '', title: '' },
+      statusMessage: 'جاهز للمعالجة',
+      metadata: { namespace: 'laws', articleNumber: '', date: '', title: '', section: '', issuedBy: '', keywords: [] },
     }));
 
     setDocuments(prev => [...prev, ...newDocs]);
@@ -107,7 +121,7 @@ export default function Home() {
     }
   };
 
-  const handleMetadataChange = (id: string, field: keyof ProcessedDocument['metadata'], value: string) => {
+  const handleMetadataChange = (id: string, field: keyof ProcessedDocument['metadata'], value: string | string[]) => {
     setDocuments(prev => prev.map(doc =>
       doc.id === id ? { ...doc, metadata: { ...doc.metadata, [field]: value } } : doc
     ));
@@ -118,8 +132,8 @@ export default function Home() {
     if (completedDocs.length === 0) {
       toast({
         variant: "destructive",
-        title: "Export Failed",
-        description: "No documents have been processed successfully.",
+        title: "فشل التصدير",
+        description: "لم تتم معالجة أي مستندات بنجاح.",
       });
       return;
     }
@@ -148,8 +162,8 @@ export default function Home() {
     URL.revokeObjectURL(url);
 
     toast({
-      title: "Export Successful",
-      description: `${completedDocs.length} documents exported to sadeed_export.json.`,
+      title: "نجح التصدير",
+      description: `تم تصدير ${completedDocs.length} مستند بنجاح إلى sadeed_export.json.`,
     });
   };
 
@@ -158,6 +172,7 @@ export default function Home() {
       case 'pending': return <FileText className="h-4 w-4 text-muted-foreground" />;
       case 'ocr':
       case 'identification':
+      case 'metadata':
       case 'chunking':
       case 'embedding':
         return <Loader className="h-4 w-4 animate-spin text-primary" />;
@@ -172,11 +187,11 @@ export default function Home() {
       <header className="sticky top-0 z-10 flex items-center justify-between h-16 px-4 md:px-8 border-b bg-card">
         <div className="flex items-center gap-3">
           <Logo className="h-7 w-7 text-primary" />
-          <h1 className="text-xl font-semibold font-headline">Sadeed Knowledge Weaver</h1>
+          <h1 className="text-xl font-semibold font-headline">أداة بناء المعرفة من سديد</h1>
         </div>
         <Button onClick={handleExport} disabled={documents.every(d => d.status !== 'completed')}>
-          <Download className="mr-2 h-4 w-4" />
-          Export to JSON
+          <Download className="ml-2 h-4 w-4" />
+          تصدير إلى JSON
         </Button>
       </header>
 
@@ -185,8 +200,8 @@ export default function Home() {
           <div className="lg:col-span-1 flex flex-col gap-6">
             <Card>
               <CardHeader>
-                <CardTitle className="font-headline">Upload Documents</CardTitle>
-                <CardDescription>Upload PDF files for processing.</CardDescription>
+                <CardTitle className="font-headline">رفع المستندات</CardTitle>
+                <CardDescription>رفع ملفات PDF أو صور للمعالجة.</CardDescription>
               </CardHeader>
               <CardContent>
                 <label
@@ -202,30 +217,30 @@ export default function Home() {
                   <div className="flex flex-col items-center justify-center pt-5 pb-6">
                     <UploadCloud className="w-10 h-10 mb-3 text-muted-foreground" />
                     <p className="mb-2 text-sm text-muted-foreground">
-                      <span className="font-semibold">Click to upload</span> or drag and drop
+                      <span className="font-semibold">انقر للرفع</span> أو اسحب وأفلت
                     </p>
-                    <p className="text-xs text-muted-foreground">PDF files only</p>
+                    <p className="text-xs text-muted-foreground">ملفات PDF, PNG, JPG</p>
                   </div>
-                  <Input id="file-upload" type="file" className="hidden" multiple accept=".pdf" onChange={(e) => handleFileChange(e.target.files)} />
+                  <Input id="file-upload" type="file" className="hidden" multiple accept=".pdf,.png,.jpeg,.jpg" onChange={(e) => handleFileChange(e.target.files)} />
                 </label>
               </CardContent>
             </Card>
 
             <Card className="flex-1 flex flex-col">
               <CardHeader>
-                <CardTitle className="font-headline">Document Queue</CardTitle>
-                <CardDescription>List of documents being processed.</CardDescription>
+                <CardTitle className="font-headline">قائمة المستندات</CardTitle>
+                <CardDescription>قائمة المستندات قيد المعالجة.</CardDescription>
               </CardHeader>
               <CardContent className="flex-1">
                 <ScrollArea className="h-[calc(100vh-28rem)]">
-                  <div className="space-y-2 pr-4">
-                    {documents.length === 0 && <p className="text-sm text-muted-foreground text-center py-4">No documents uploaded.</p>}
+                  <div className="space-y-2 pl-4">
+                    {documents.length === 0 && <p className="text-sm text-muted-foreground text-center py-4">لم يتم رفع أي مستندات.</p>}
                     {documents.map((doc) => (
                       <button
                         key={doc.id}
                         onClick={() => setSelectedDocId(doc.id)}
                         className={cn(
-                          "w-full text-left p-3 rounded-lg border transition-colors",
+                          "w-full text-right p-3 rounded-lg border transition-colors",
                           selectedDocId === doc.id ? "bg-primary/10 border-primary" : "hover:bg-accent/50"
                         )}
                       >
@@ -249,77 +264,101 @@ export default function Home() {
                   <CardTitle className="font-headline truncate flex items-center gap-2"><FileText className="w-6 h-6"/>{selectedDocument.file.name}</CardTitle>
                   <CardDescription>
                     {selectedDocument.identifiedType && (
-                      <Badge variant="secondary">Type: {selectedDocument.identifiedType} ({(selectedDocument.typeConfidence! * 100).toFixed(0)}% confidence)</Badge>
+                      <Badge variant="secondary">النوع: {selectedDocument.identifiedType} (بثقة {(selectedDocument.typeConfidence! * 100).toFixed(0)}%)</Badge>
                     )}
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
                   <Accordion type="single" collapsible defaultValue="metadata">
                     <AccordionItem value="metadata">
-                      <AccordionTrigger className="font-headline"><Tags className="mr-2"/>Metadata</AccordionTrigger>
+                      <AccordionTrigger className="font-headline"><Tags className="ml-2"/>البيانات الوصفية</AccordionTrigger>
                       <AccordionContent className="space-y-4 pt-2">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           <div className="space-y-2">
-                            <Label htmlFor="namespace">Namespace</Label>
+                            <Label htmlFor="namespace">فئة المستند</Label>
                             <Select
                               value={selectedDocument.metadata.namespace}
                               onValueChange={(value) => handleMetadataChange(selectedDocument.id, 'namespace', value)}
-                              disabled={selectedDocument.status !== 'completed'}
                             >
                               <SelectTrigger id="namespace"><SelectValue /></SelectTrigger>
                               <SelectContent>
-                                <SelectItem value="laws">Laws</SelectItem>
-                                <SelectItem value="decrees">Decrees</SelectItem>
-                                <SelectItem value="regulations">Regulations</SelectItem>
-                                <SelectItem value="contracts">Contracts</SelectItem>
-                                <SelectItem value="judgments">Judgments</SelectItem>
-                                <SelectItem value="Uncategorized">Uncategorized</SelectItem>
+                                <SelectItem value="laws">قوانين</SelectItem>
+                                <SelectItem value="decrees">مراسيم</SelectItem>
+                                <SelectItem value="regulations">لوائح</SelectItem>
+                                <SelectItem value="contracts">عقود</SelectItem>
+                                <SelectItem value="judgments">أحكام</SelectItem>
+                                <SelectItem value="Uncategorized">غير مصنف</SelectItem>
                               </SelectContent>
                             </Select>
                           </div>
-                          <div className="space-y-2">
-                            <Label htmlFor="doc-number">Document Number</Label>
+                           <div className="space-y-2">
+                            <Label htmlFor="doc-number">رقم المادة/المستند</Label>
                             <Input
                               id="doc-number"
-                              placeholder="e.g., Law No. 123"
-                              value={selectedDocument.metadata.documentNumber}
-                              onChange={(e) => handleMetadataChange(selectedDocument.id, 'documentNumber', e.target.value)}
-                              disabled={selectedDocument.status !== 'completed'}
+                              placeholder="مثال: قانون رقم 123"
+                              value={selectedDocument.metadata.articleNumber}
+                              onChange={(e) => handleMetadataChange(selectedDocument.id, 'articleNumber', e.target.value)}
                             />
                           </div>
                         </div>
                         <div className="space-y-2">
-                          <Label htmlFor="doc-title">Title</Label>
+                          <Label htmlFor="doc-title">العنوان</Label>
                           <Input
                             id="doc-title"
-                            placeholder="Document title"
+                            placeholder="عنوان المستند"
                             value={selectedDocument.metadata.title}
                             onChange={(e) => handleMetadataChange(selectedDocument.id, 'title', e.target.value)}
-                            disabled={selectedDocument.status !== 'completed'}
                           />
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div className="space-y-2">
+                            <Label htmlFor="doc-section">القسم</Label>
+                            <Input
+                              id="doc-section"
+                              placeholder="القسم أو الباب"
+                              value={selectedDocument.metadata.section}
+                              onChange={(e) => handleMetadataChange(selectedDocument.id, 'section', e.target.value)}
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="doc-date">التاريخ</Label>
+                            <Input
+                              id="doc-date"
+                              type="date"
+                              value={selectedDocument.metadata.date}
+                              onChange={(e) => handleMetadataChange(selectedDocument.id, 'date', e.target.value)}
+                            />
+                          </div>
                         </div>
                         <div className="space-y-2">
-                          <Label htmlFor="doc-date">Date</Label>
+                          <Label htmlFor="doc-issuedBy">جهة الإصدار</Label>
                           <Input
-                            id="doc-date"
-                            type="date"
-                            value={selectedDocument.metadata.date}
-                            onChange={(e) => handleMetadataChange(selectedDocument.id, 'date', e.target.value)}
-                            disabled={selectedDocument.status !== 'completed'}
+                            id="doc-issuedBy"
+                            placeholder="مثال: وزارة العدل"
+                            value={selectedDocument.metadata.issuedBy}
+                            onChange={(e) => handleMetadataChange(selectedDocument.id, 'issuedBy', e.target.value)}
                           />
                         </div>
+                         <div className="space-y-2">
+                          <Label><Key className="inline-block ml-1 h-4 w-4" />الكلمات المفتاحية</Label>
+                           <div className="flex flex-wrap gap-2 pt-2">
+                            {selectedDocument.metadata.keywords.length > 0 ? selectedDocument.metadata.keywords.map((kw, i) => (
+                               <Badge key={i} variant="secondary">{kw}</Badge>
+                            )) : <p className="text-sm text-muted-foreground">لا توجد كلمات مفتاحية.</p>}
+                           </div>
+                         </div>
                       </AccordionContent>
                     </AccordionItem>
                     <AccordionItem value="chunks">
-                      <AccordionTrigger className="font-headline"><BookText className="mr-2"/>Knowledge Chunks ({selectedDocument.chunks?.length || 0})</AccordionTrigger>
+                      <AccordionTrigger className="font-headline"><BookText className="ml-2"/>وحدات المعرفة ({selectedDocument.chunks?.length || 0})</AccordionTrigger>
                       <AccordionContent>
                         <ScrollArea className="h-80 mt-2 p-3 border rounded-md bg-muted/50">
                           {selectedDocument.status === 'completed' && selectedDocument.chunks?.map((chunk, index) => (
                             <div key={index} className="p-3 mb-2 bg-background rounded-md shadow-sm">
-                              <p className="text-sm">{chunk}</p>
+                              <p className="text-sm leading-relaxed">{chunk}</p>
                             </div>
                           ))}
-                          {selectedDocument.status !== 'completed' && <p className="text-sm text-center text-muted-foreground">Chunks will appear here after processing.</p>}
+                          {selectedDocument.status !== 'completed' && <p className="text-sm text-center text-muted-foreground">ستظهر المقاطع هنا بعد اكتمال المعالجة.</p>}
                         </ScrollArea>
                       </AccordionContent>
                     </AccordionItem>
@@ -329,8 +368,8 @@ export default function Home() {
             ) : (
               <div className="flex flex-col items-center justify-center h-full border-2 border-dashed rounded-lg">
                 <FileText className="w-16 h-16 text-muted-foreground" />
-                <h2 className="mt-4 text-xl font-semibold font-headline">Select a document</h2>
-                <p className="text-muted-foreground">Choose a document from the left to view its details.</p>
+                <h2 className="mt-4 text-xl font-semibold font-headline">اختر مستند</h2>
+                <p className="text-muted-foreground">اختر مستندًا من القائمة لعرض تفاصيله.</p>
               </div>
             )}
           </div>
