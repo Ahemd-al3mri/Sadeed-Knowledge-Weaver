@@ -109,13 +109,13 @@ export default function Home() {
     }
   };
   
-  const handleDragEvents = (e: DragEvent<HTMLDivElement>, drag: boolean) => {
+  const handleDragEvents = (e: DragEvent<HTMLElement>, drag: boolean) => {
     e.preventDefault();
     e.stopPropagation();
     setIsDragging(drag);
   }
 
-  const handleDrop = (e: DragEvent<HTMLDivElement>) => {
+  const handleDrop = (e: DragEvent<HTMLElement>) => {
     handleDragEvents(e, false);
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
       handleFileChange(e.dataTransfer.files);

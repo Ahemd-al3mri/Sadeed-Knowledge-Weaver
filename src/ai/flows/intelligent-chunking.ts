@@ -1,4 +1,4 @@
-// use server'
+'use server';
 
 /**
  * @fileOverview An intelligent chunking AI agent.
