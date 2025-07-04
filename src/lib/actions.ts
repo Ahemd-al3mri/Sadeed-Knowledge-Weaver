@@ -5,6 +5,8 @@ import { identifyDocumentType } from '@/ai/flows/auto-document-type-identificati
 import { intelligentChunking } from '@/ai/flows/intelligent-chunking';
 import { generateEmbeddings } from '@/ai/flows/embedding-generation';
 import { extractMetadata } from '@/ai/flows/metadata-extraction';
+import { upsertToPinecone } from '@/lib/pinecone';
+import type { ProcessedDocument } from './types';
 
 export async function runOcr(fileDataUri: string) {
   try {
@@ -67,4 +69,14 @@ export async function runEmbedding(chunks: string[]) {
     console.error('Embedding Generation failed:', e);
     throw new Error('Failed to generate embeddings for the document.');
   }
+}
+
+export async function saveDocumentToVectorDB(doc: ProcessedDocument) {
+    try {
+        const result = await upsertToPinecone(doc);
+        return result;
+    } catch (e) {
+        console.error('Failed to save to Pinecone:', e);
+        throw new Error(`Failed to save document to vector database: ${e instanceof Error ? e.message : 'Unknown error'}`);
+    }
 }

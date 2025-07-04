@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useCallback, type ChangeEvent, type DragEvent } from 'react';
 import { v4 as uuidv4 } from 'uuid';
-import { runOcr, runDocTypeIdentification, runMetadataExtraction, runChunking, runEmbedding } from '@/lib/actions';
+import { runOcr, runDocTypeIdentification, runMetadataExtraction, runChunking, runEmbedding, saveDocumentToVectorDB } from '@/lib/actions';
 import type { ProcessedDocument, ProcessingStatus } from '@/lib/types';
 import { cn } from '@/lib/utils';
 import { useToast } from "@/hooks/use-toast";
@@ -16,7 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
-import { UploadCloud, FileText, Loader, CheckCircle2, XCircle, Download, BookText, Tags, Key, Building, PlayCircle } from 'lucide-react';
+import { UploadCloud, FileText, Loader, CheckCircle2, XCircle, Download, BookText, Tags, Key, Building, PlayCircle, Database } from 'lucide-react';
 
 const fileToDataUri = (file: File): Promise<string> => {
   return new Promise((resolve, reject) => {
@@ -32,6 +32,7 @@ export default function Home() {
   const [selectedDocId, setSelectedDocId] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [updatingChunkIndex, setUpdatingChunkIndex] = useState<number | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
   const { toast } = useToast();
 
   const selectedDocument = useMemo(() => {
@@ -177,44 +178,69 @@ export default function Home() {
   }, [documents, toast]);
 
 
-  const handleExport = () => {
+  const handleFinalize = async () => {
     const completedDocs = documents.filter(doc => doc.status === 'completed');
     if (completedDocs.length === 0) {
       toast({
         variant: "destructive",
-        title: "فشل التصدير",
-        description: "لم تتم معالجة أي مستندات بنجاح.",
+        title: "لا يوجد شيء للحفظ",
+        description: "الرجاء معالجة مستند واحد على الأقل بنجاح.",
       });
       return;
     }
 
-    const pineconeData = completedDocs.flatMap(doc => 
-      doc.chunks?.map((chunk, index) => ({
-        id: `${doc.id}-${index}`,
-        values: doc.embeddings ? doc.embeddings[index] : [],
-        metadata: {
-          text: chunk,
-          source: doc.file.name,
-          ...doc.metadata
-        }
-      })) ?? []
-    );
+    setIsSaving(true);
+    let savedCount = 0;
+    try {
+      // Save all completed documents to Pinecone
+      for (const doc of completedDocs) {
+        await saveDocumentToVectorDB(doc);
+        savedCount++;
+      }
 
-    const dataStr = JSON.stringify(pineconeData, null, 2);
-    const dataBlob = new Blob([dataStr], { type: "application/json" });
-    const url = URL.createObjectURL(dataBlob);
-    const link = document.createElement('a');
-    link.download = 'sadeed_export.json';
-    link.href = url;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
+      toast({
+        title: "نجح الحفظ في قاعدة البيانات",
+        description: `تم حفظ ${savedCount} مستند في قاعدة البيانات بنجاح.`,
+      });
 
-    toast({
-      title: "نجح التصدير",
-      description: `تم تصدير ${completedDocs.length} مستند بنجاح إلى sadeed_export.json.`,
-    });
+      // Now, trigger the JSON export for personal backup
+      const pineconeData = completedDocs.flatMap(doc => 
+        doc.chunks?.map((chunk, index) => ({
+          id: `${doc.id}-${index}`,
+          values: doc.embeddings ? doc.embeddings[index] : [],
+          metadata: {
+            text: chunk,
+            source: doc.file.name,
+            ...doc.metadata
+          }
+        })) ?? []
+      );
+
+      const dataStr = JSON.stringify(pineconeData, null, 2);
+      const dataBlob = new Blob([dataStr], { type: "application/json" });
+      const url = URL.createObjectURL(dataBlob);
+      const link = document.createElement('a');
+      link.download = 'sadeed_export.json';
+      link.href = url;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      
+      toast({
+        title: "نجح التصدير",
+        description: `تم تصدير ${completedDocs.length} مستند بنجاح إلى sadeed_export.json.`,
+      });
+
+    } catch (error) {
+       toast({
+        variant: "destructive",
+        title: "فشل الحفظ",
+        description: error instanceof Error ? error.message : "An unknown error occurred.",
+      });
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const StatusIcon = ({ status }: { status: ProcessingStatus }) => {
@@ -421,9 +447,9 @@ export default function Home() {
           <Logo className="h-7 w-7 text-primary" />
           <h1 className="text-xl font-semibold font-headline">أداة بناء المعرفة من سديد</h1>
         </div>
-        <Button onClick={handleExport} disabled={documents.every(d => d.status !== 'completed')}>
-          <Download className="ml-2 h-4 w-4" />
-          تصدير إلى JSON
+        <Button onClick={handleFinalize} disabled={isSaving || documents.every(d => d.status !== 'completed')}>
+          {isSaving ? <Loader className="ml-2 h-4 w-4 animate-spin" /> : <Database className="ml-2 h-4 w-4" />}
+          تأكيد وإرسال للقاعدة
         </Button>
       </header>
 
