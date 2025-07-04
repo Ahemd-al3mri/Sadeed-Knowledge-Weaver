@@ -8,7 +8,8 @@
  */
 
 import {ai} from '@/ai/genkit';
-import {embed, z} from 'genkit';
+import {openai} from '@/ai/openai';
+import {z} from 'genkit';
 
 const GenerateEmbeddingsInputSchema = z.object({
   chunks: z.array(z.string()).describe('An array of text chunks to be embedded.'),
@@ -19,27 +20,17 @@ const GenerateEmbeddingsOutputSchema = z.array(z.array(z.number())).describe('An
 export type GenerateEmbeddingsOutput = z.infer<typeof GenerateEmbeddingsOutputSchema>;
 
 export async function generateEmbeddings(input: GenerateEmbeddingsInput): Promise<GenerateEmbeddingsOutput> {
-  return generateEmbeddingsFlow(input);
+  const { chunks } = input;
+  // استخدم OpenAI Embedding API مع تحديد الأبعاد المطلوبة
+  const responses = await Promise.all(
+    chunks.map(async (chunk) => {
+      const response = await openai.embeddings.create({
+        model: 'text-embedding-3-large',
+        input: chunk,
+        dimensions: 1024,
+      });
+      return response.data[0].embedding;
+    })
+  );
+  return responses;
 }
-
-const generateEmbeddingsFlow = ai.defineFlow(
-  {
-    name: 'generateEmbeddingsFlow',
-    inputSchema: GenerateEmbeddingsInputSchema,
-    outputSchema: GenerateEmbeddingsOutputSchema,
-  },
-  async ({ chunks }) => {
-    // The gemini-embedding-001 model only supports one piece of content per request.
-    // We use Promise.all to process all chunks in parallel.
-    const embeddingPromises = chunks.map(chunk => 
-      embed({
-        embedder: 'googleai/gemini-embedding-001',
-        content: chunk,
-        taskType: 'RETRIEVAL_DOCUMENT',
-      })
-    );
-    
-    const embeddings = await Promise.all(embeddingPromises);
-    return embeddings;
-  }
-);
