@@ -45,22 +45,30 @@ export class IntelligentDocumentProcessor {
   
   private static getProcessorForType(type: DocumentType): DocumentTypeProcessor {
     switch (type) {
-      case 'legal_fatwa':
+      case 'fatwas':
         return new FatwaProcessor();
-      case 'law_article':
+      case 'laws':
         return new LawProcessor();
-      case 'royal_decree':
+      case 'royal_decrees':
         return new RoyalDecreeProcessor();
       case 'judicial_civil':
         return new JudicialCivilProcessor();
       case 'judicial_criminal':
         return new JudicialCriminalProcessor();
-      case 'ministerial_decision':
+      case 'ministerial_decisions':
         return new MinisterialDecisionProcessor();
-      case 'regulation':
+      case 'regulations':
         return new RegulationProcessor();
+      case 'royal_orders':
+        return new RoyalOrderProcessor();
+      case 'judicial_principles':
+        return new JudicialPrincipleProcessor();
+      case 'indexes':
+        return new IndexProcessor();
+      case 'templates':
+        return new TemplateProcessor();
       default:
-        return new GenericProcessor();
+        return new OtherProcessor();
     }
   }
 }
@@ -121,7 +129,7 @@ class FatwaProcessor extends DocumentTypeProcessor {
     // Create single chunk per fatwa (as per instructions)
     const chunk: DocumentChunk = {
       id: this.generateChunkId('fatwa', 0),
-      type: 'legal_fatwa',
+      type: 'fatwas',
       namespace: 'fatwas',
       content: this.formatFatwaContent(question, answer, legalBasis),
       metadata: {
@@ -145,7 +153,7 @@ class FatwaProcessor extends DocumentTypeProcessor {
     notes.push('Processed as single fatwa chunk with Q&A structure');
     
     const metadata: DocumentMetadata = {
-      type: 'legal_fatwa',
+      type: 'fatwas',
       namespace: 'fatwas',
       source: 'وزارة العدل والشؤون القانونية',
       language: 'ar',
@@ -217,7 +225,7 @@ class LawProcessor extends DocumentTypeProcessor {
     articles.forEach((article, index) => {
       const chunk: DocumentChunk = {
         id: this.generateChunkId('law_article', index),
-        type: 'law_article',
+        type: 'laws',
         namespace: 'laws',
         content: article.text,
         metadata: {
@@ -238,7 +246,7 @@ class LawProcessor extends DocumentTypeProcessor {
     notes.push(`Processed ${articles.length} law articles as separate chunks`);
     
     const metadata: DocumentMetadata = {
-      type: 'law_article',
+      type: 'laws',
       namespace: 'laws',
       source: 'الجريدة الرسمية',
       language: 'ar',
@@ -325,12 +333,36 @@ class RegulationProcessor extends DocumentTypeProcessor {
   }
 }
 
-class GenericProcessor extends DocumentTypeProcessor {
+class RoyalOrderProcessor extends DocumentTypeProcessor {
+  async process(content: string, ocrConfidence?: number) {
+    return { chunks: [], metadata: {} as DocumentMetadata, notes: ['Royal order processing not yet implemented'] };
+  }
+}
+
+class JudicialPrincipleProcessor extends DocumentTypeProcessor {
+  async process(content: string, ocrConfidence?: number) {
+    return { chunks: [], metadata: {} as DocumentMetadata, notes: ['Judicial principle processing not yet implemented'] };
+  }
+}
+
+class IndexProcessor extends DocumentTypeProcessor {
+  async process(content: string, ocrConfidence?: number) {
+    return { chunks: [], metadata: {} as DocumentMetadata, notes: ['Index processing not yet implemented'] };
+  }
+}
+
+class TemplateProcessor extends DocumentTypeProcessor {
+  async process(content: string, ocrConfidence?: number) {
+    return { chunks: [], metadata: {} as DocumentMetadata, notes: ['Template processing not yet implemented'] };
+  }
+}
+
+class OtherProcessor extends DocumentTypeProcessor {
   async process(content: string, ocrConfidence?: number) {
     const chunks: DocumentChunk[] = [{
-      id: this.generateChunkId('generic', 0),
-      type: 'mixed_source',
-      namespace: 'mixed_sources',
+      id: this.generateChunkId('other', 0),
+      type: 'others',
+      namespace: 'others',
       content: content,
       metadata: {
         keywords: this.extractKeywords(content),
@@ -340,8 +372,8 @@ class GenericProcessor extends DocumentTypeProcessor {
     }];
     
     const metadata: DocumentMetadata = {
-      type: 'mixed_source',
-      namespace: 'mixed_sources',
+      type: 'others',
+      namespace: 'others',
       source: 'Unknown',
       language: 'ar',
       processingDate: new Date().toISOString(),
