@@ -1,4 +1,4 @@
-export type ProcessingStatus = 'pending' | 'ocr' | 'identification' | 'chunking' | 'completed' | 'error';
+export type ProcessingStatus = 'pending' | 'ocr' | 'identification' | 'chunking' | 'embedding' | 'completed' | 'error';
 
 export interface ProcessedDocument {
   id: string;
@@ -9,6 +9,7 @@ export interface ProcessedDocument {
   identifiedType?: string;
   typeConfidence?: number;
   chunks?: string[];
+  embeddings?: number[][];
   metadata: {
     namespace: string;
     documentNumber: string;

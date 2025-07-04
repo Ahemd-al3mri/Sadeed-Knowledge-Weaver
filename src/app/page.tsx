@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useCallback, type ChangeEvent, type DragEvent } from 'react';
 import { v4 as uuidv4 } from 'uuid';
-import { runOcr, runDocTypeIdentification, runChunking } from '@/lib/actions';
+import { runOcr, runDocTypeIdentification, runChunking, runEmbedding } from '@/lib/actions';
 import type { ProcessedDocument, ProcessingStatus } from '@/lib/types';
 import { cn } from '@/lib/utils';
 import { useToast } from "@/hooks/use-toast";
@@ -62,7 +62,12 @@ export default function Home() {
       // 3. Chunking
       setDocuments(prev => prev.map(d => d.id === docId ? { ...d, status: 'chunking', statusMessage: 'Segmenting content...' } : d));
       const chunks = await runChunking(extractedText, documentType);
-      setDocuments(prev => prev.map(d => d.id === docId ? { ...d, chunks, status: 'completed', statusMessage: 'Processing complete.' } : d));
+      setDocuments(prev => prev.map(d => d.id === docId ? { ...d, chunks } : d));
+
+      // 4. Embedding
+      setDocuments(prev => prev.map(d => d.id === docId ? { ...d, status: 'embedding', statusMessage: 'Generating embeddings...' } : d));
+      const embeddings = await runEmbedding(chunks);
+      setDocuments(prev => prev.map(d => d.id === docId ? { ...d, embeddings, status: 'completed', statusMessage: 'Processing complete.' } : d));
 
     } catch (error) {
       console.error('Processing failed:', error);
@@ -122,7 +127,7 @@ export default function Home() {
     const pineconeData = completedDocs.flatMap(doc => 
       doc.chunks?.map((chunk, index) => ({
         id: `${doc.id}-${index}`,
-        values: [],
+        values: doc.embeddings ? doc.embeddings[index] : [],
         metadata: {
           text: chunk,
           source: doc.file.name,
@@ -154,6 +159,7 @@ export default function Home() {
       case 'ocr':
       case 'identification':
       case 'chunking':
+      case 'embedding':
         return <Loader className="h-4 w-4 animate-spin text-primary" />;
       case 'completed': return <CheckCircle2 className="h-4 w-4 text-green-500" />;
       case 'error': return <XCircle className="h-4 w-4 text-destructive" />;

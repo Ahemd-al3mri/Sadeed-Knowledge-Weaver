@@ -3,6 +3,7 @@
 import { ocrProcessing } from '@/ai/flows/ocr-processing';
 import { identifyDocumentType } from '@/ai/flows/auto-document-type-identification';
 import { intelligentChunking } from '@/ai/flows/intelligent-chunking';
+import { generateEmbeddings } from '@/ai/flows/embedding-generation';
 
 export async function runOcr(fileDataUri: string) {
   try {
@@ -40,5 +41,18 @@ export async function runChunking(documentText: string, documentType: string) {
   } catch (e) {
     console.error('Intelligent Chunking failed:', e);
     throw new Error('Failed to chunk the document.');
+  }
+}
+
+export async function runEmbedding(chunks: string[]) {
+  try {
+    const result = await generateEmbeddings({ chunks });
+    if (!result || result.length === 0) {
+      throw new Error('Embedding process returned no vectors.');
+    }
+    return result;
+  } catch (e) {
+    console.error('Embedding Generation failed:', e);
+    throw new Error('Failed to generate embeddings for the document.');
   }
 }
