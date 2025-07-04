@@ -1,4 +1,13 @@
+import { createHash } from 'crypto';
 import { DocumentClassifier, DocumentType, validateDocumentClassification } from './document-classification';
+
+// Custom error for duplicate documents
+export class DuplicateDocumentError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'DuplicateDocumentError';
+  }
+}
 
 // AI Processing Pipeline that uses the data_instructions for document classification
 export class IntelligentDocumentProcessor {
@@ -6,11 +15,13 @@ export class IntelligentDocumentProcessor {
   /**
    * Process a document using the appropriate instruction template
    * @param documentContent - Raw document text
+   * @param existingHashes - A set of existing content hashes to check for duplicates
    * @param ocrConfidence - OCR confidence score if applicable
    * @returns Processed document with metadata and chunks
    */
   static async processDocument(
     documentContent: string, 
+    existingHashes: Set<string>,
     ocrConfidence?: number
   ): Promise<{
     classification: DocumentType;
@@ -18,15 +29,24 @@ export class IntelligentDocumentProcessor {
     chunks: DocumentChunk[];
     metadata: DocumentMetadata;
     processingNotes: string[];
+    contentHash: string;
   }> {
     
-    // Step 1: Classify the document
-    const classificationResult = DocumentClassifier.classifyDocument(documentContent);
-    const validation = validateDocumentClassification(documentContent);
+    // Step 1: Clean and hash the content for deduplication
+    const cleanedContent = this.cleanContent(documentContent);
+    const contentHash = this.generateContentHash(cleanedContent);
+
+    if (existingHashes.has(contentHash)) {
+      throw new DuplicateDocumentError(`Document with hash ${contentHash} has already been processed.`);
+    }
     
-    // Step 2: Apply type-specific processing rules
+    // Step 2: Classify the document
+    const classificationResult = DocumentClassifier.classifyDocument(cleanedContent);
+    const validation = validateDocumentClassification(cleanedContent);
+    
+    // Step 3: Apply type-specific processing rules
     const processor = this.getProcessorForType(classificationResult.type);
-    const processedResult = await processor.process(documentContent, ocrConfidence);
+    const processedResult = await processor.process(cleanedContent, ocrConfidence);
     
     return {
       classification: classificationResult.type,
@@ -39,8 +59,31 @@ export class IntelligentDocumentProcessor {
         `Confidence: ${(classificationResult.confidence * 100).toFixed(1)}%`,
         ...validation.recommendations,
         ...processedResult.notes
-      ]
+      ],
+      contentHash // Return the hash so it can be stored
     };
+  }
+
+  /**
+   * Cleans the content by removing extra whitespace and normalizing line breaks.
+   * @param content - The raw string content.
+   * @returns Cleaned string.
+   */
+  private static cleanContent(content: string): string {
+    return content
+      .replace(/\r\n/g, '\n') // Normalize line endings
+      .replace(/[ \t]+/g, ' ') // Replace multiple spaces/tabs with a single space
+      .replace(/\n{3,}/g, '\n\n') // Reduce multiple newlines to a maximum of two
+      .trim(); // Trim leading/trailing whitespace
+  }
+
+  /**
+   * Generates a SHA-256 hash for the given content.
+   * @param content - The string content to hash.
+   * @returns A SHA-256 hash string.
+   */
+  private static generateContentHash(content: string): string {
+    return createHash('sha256').update(content).digest('hex');
   }
   
   private static getProcessorForType(type: DocumentType): DocumentTypeProcessor {
