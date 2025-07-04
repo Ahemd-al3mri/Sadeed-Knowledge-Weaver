@@ -3,70 +3,106 @@ import { parseArabicTable } from './arabic-table-parser';
 
 // Document classification schemas based on data_instructions folder
 export const DocumentTypeSchema = z.enum([
-  'legal_fatwa',
-  'law_article', 
-  'royal_decree',
-  'judicial_civil',
-  'judicial_criminal',
+  'laws',
+  'royal_decrees', 
+  'regulations',
+  'ministerial_decisions',
+  'royal_orders',
+  'fatwas',
   'judicial_principles',
-  'ministerial_decision',
-  'regulation',
-  'royal_order',
-  'decree',
-  'mixed_source'
+  'judicial_criminal',
+  'judicial_civil',
+  'indexes',
+  'templates',
+  'others'
 ]);
 
 export type DocumentType = z.infer<typeof DocumentTypeSchema>;
 
 // Classification patterns extracted from instruction files
 export const DocumentClassificationPatterns = {
-  legal_fatwa: {
-    identifiers: ['فتوى', 'إجابة', 'استفسار', 'وزارة العدل والشؤون القانونية'],
+  laws: {
+    identifiers: ['قانون', 'مادة', 'باب', 'فصل', 'قانون العمل', 'قانون الجزاء'],
+    structure: ['المادة', 'الباب', 'الفصل', 'قانون رقم'],
+    namespace: 'laws',
+    requiredFields: ['law_title', 'article_number', 'text']
+  },
+  
+  royal_decrees: {
+    identifiers: ['مرسوم سلطاني', 'نحن قابوس', 'نحن هيثم', 'سلطان عمان', 'صدر في'],
+    structure: ['مرسوم سلطاني رقم', 'نحن', 'صدر في'],
+    namespace: 'decrees',
+    requiredFields: ['decree_number', 'title', 'date']
+  },
+  
+  regulations: {
+    identifiers: ['اللائحة التنفيذية', 'لائحة', 'تنظيم', 'ضوابط', 'إجراءات'],
+    structure: ['اللائحة التنفيذية لقانون', 'المادة', 'الأحكام'],
+    namespace: 'regulations',
+    requiredFields: ['regulation_title', 'issuing_authority']
+  },
+  
+  ministerial_decisions: {
+    identifiers: ['قرار وزاري', 'الوزير', 'قرار رقم', 'وزارة'],
+    structure: ['قرار وزاري رقم', 'الوزير', 'المادة'],
+    namespace: 'ministerial_decisions',
+    requiredFields: ['decision_number', 'ministry', 'subject']
+  },
+  
+  royal_orders: {
+    identifiers: ['أمر سام', 'أمر سامي', 'توجيه سامي', 'منح وسام', 'تعيين'],
+    structure: ['أمر سام بـ', 'جلالة السلطان', 'منح'],
+    namespace: 'royal_orders',
+    requiredFields: ['order_number', 'subject', 'date']
+  },
+  
+  fatwas: {
+    identifiers: ['فتوى', 'إجابة', 'استفسار', 'وزارة العدل والشؤون القانونية', 'دار الإفتاء'],
     structure: ['رقم الفتوى', 'السؤال', 'الجواب', 'الأساس القانوني'],
     namespace: 'fatwas',
     requiredFields: ['fatwa_number', 'question', 'answer']
   },
   
-  law_article: {
-    identifiers: ['مادة', 'قانون', 'مرسوم سلطاني', 'باب', 'فصل'],
-    structure: ['عنوان القانون', 'رقم المادة', 'نص المادة'],
-    namespace: 'laws',
-    requiredFields: ['law_title', 'article_number', 'text']
-  },
-  
-  royal_decree: {
-    identifiers: ['مرسوم سلطاني', 'نحن', 'سلطان عمان', 'صدر في'],
-    structure: ['رقم المرسوم', 'الديباجة', 'المواد', 'مادة النفاذ'],
-    namespace: 'royal_decrees',
-    requiredFields: ['decree_number', 'title', 'date']
-  },
-  
-  judicial_civil: {
-    identifiers: ['المحكمة العليا', 'الدائرة المدنية', 'مبدأ', 'قضية'],
-    structure: ['رقم المبدأ', 'رقم القضية', 'موضوع المبدأ', 'نص المبدأ'],
-    namespace: 'judicial_civil',
+  judicial_principles: {
+    identifiers: ['مبدأ قضائي', 'المحكمة العليا', 'مبدأ', 'قضية رقم', 'مبادئ قضائية'],
+    structure: ['مبدأ رقم', 'قضية رقم', 'المحكمة العليا'],
+    namespace: 'judicial_principles',
     requiredFields: ['principle_number', 'case_number', 'topic']
   },
   
   judicial_criminal: {
-    identifiers: ['المحكمة العليا', 'الدائرة الجزائية', 'حكم', 'جناية', 'جنحة'],
-    structure: ['رقم الحكم', 'التهمة', 'الحكم', 'المبدأ القانوني'],
+    identifiers: ['الدائرة الجزائية', 'حكم جزائي', 'جناية', 'جنحة', 'عقوبة'],
+    structure: ['الدائرة الجزائية', 'حكم رقم', 'التهمة', 'العقوبة'],
     namespace: 'judicial_criminal',
     requiredFields: ['judgment_number', 'charge', 'verdict']
   },
   
-  ministerial_decision: {
-    identifiers: ['قرار وزاري', 'الوزير', 'قرار رقم'],
-    structure: ['رقم القرار', 'الوزارة', 'موضوع القرار', 'المواد'],
-    namespace: 'ministerial_decisions',
-    requiredFields: ['decision_number', 'ministry', 'subject']
+  judicial_civil: {
+    identifiers: ['الدائرة المدنية', 'الدائرة التجارية', 'حكم مدني', 'دعوى مدنية', 'عقد'],
+    structure: ['الدائرة المدنية', 'حكم رقم', 'الحكم', 'المبدأ'],
+    namespace: 'judicial_civil',
+    requiredFields: ['judgment_number', 'case_type', 'verdict']
   },
   
-  regulation: {
-    identifiers: ['لائحة', 'تنظيم', 'ضوابط', 'إجراءات'],
-    structure: ['عنوان اللائحة', 'المواد', 'الأحكام'],
-    namespace: 'regulations',
-    requiredFields: ['regulation_title', 'issuing_authority']
+  indexes: {
+    identifiers: ['فهرس', 'دليل', 'كشاف', 'تصنيف', 'فهرس المبادئ'],
+    structure: ['فهرس', 'الرقم', 'الموضوع', 'الصفحة'],
+    namespace: 'indexes',
+    requiredFields: ['index_title', 'year', 'items']
+  },
+  
+  templates: {
+    identifiers: ['نموذج', 'صيغة', 'استمارة', 'توكيل', 'عقد نموذجي'],
+    structure: ['نموذج رقم', 'الصيغة', 'التوقيع'],
+    namespace: 'templates',
+    requiredFields: ['template_name', 'template_type', 'fields']
+  },
+  
+  others: {
+    identifiers: ['وثيقة', 'كتاب', 'تقرير', 'دراسة'],
+    structure: ['العنوان', 'المحتوى', 'التاريخ'],
+    namespace: 'others',
+    requiredFields: ['title', 'content_type']
   }
 };
 
@@ -118,7 +154,7 @@ export class DocumentClassifier {
     });
     
     // Find the highest scoring type
-    let bestType: string = 'mixed_source';
+    let bestType: string = 'others';
     let bestScore = 0;
     let bestPatterns: string[] = [];
     Object.entries(scores).forEach(([type, data]) => {
@@ -172,7 +208,7 @@ export class DocumentClassifier {
    */
   static getNamespace(type: DocumentType): string {
     const config = DocumentClassificationPatterns[type as keyof typeof DocumentClassificationPatterns];
-    return config?.namespace || 'mixed_sources';
+    return config?.namespace || 'others';
   }
   
   /**
@@ -182,13 +218,18 @@ export class DocumentClassifier {
    */
   static getChunkingStrategy(type: DocumentType): string {
     const strategies: Record<string, string> = {
-      legal_fatwa: 'Each fatwa as independent chunk with question/answer/legal_basis clearly separated',
-      law_article: 'Each article as independent chunk, do not merge articles',
-      royal_decree: 'Short decrees (3-4 articles) as one chunk, longer decrees split by articles',
-      judicial_civil: 'Each principle as independent chunk, maintain numbering',
-      judicial_criminal: 'Each judgment as independent chunk',
-      ministerial_decision: 'Each decision as independent chunk, split articles if lengthy',
-      regulation: 'Split by major sections or chapters, maintain hierarchy'
+      laws: 'Each article as independent chunk, do not merge articles. Maintain law structure and hierarchy.',
+      royal_decrees: 'Short decrees (3-4 articles) as one chunk, longer decrees split by articles. Include preamble context.',
+      regulations: 'Split by major sections or chapters, maintain regulatory hierarchy and cross-references.',
+      ministerial_decisions: 'Each decision as independent chunk, split articles if lengthy. Include ministry context.',
+      royal_orders: 'Each royal order as independent chunk, maintain ceremonial structure and context.',
+      fatwas: 'Each fatwa as independent chunk with question/answer/legal_basis clearly separated.',
+      judicial_principles: 'Each principle as independent chunk, maintain case numbering and court hierarchy.',
+      judicial_criminal: 'Each criminal judgment as independent chunk, include case details and verdict.',
+      judicial_civil: 'Each civil judgment as independent chunk, maintain case type and commercial context.',
+      indexes: 'Preserve index structure, each major section as chunk with item listings.',
+      templates: 'Each template as independent chunk, maintain form structure and field definitions.',
+      others: 'Apply general chunking rules based on content structure and document type.'
     };
     
     return strategies[type] || 'Apply general chunking rules based on content structure';
