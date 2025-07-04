@@ -29,12 +29,17 @@ const generateEmbeddingsFlow = ai.defineFlow(
     outputSchema: GenerateEmbeddingsOutputSchema,
   },
   async ({ chunks }) => {
-    const embeddings = await embed({
-      embedder: 'googleai/gemini-embedding-001',
-      content: chunks,
-      taskType: 'RETRIEVAL_DOCUMENT',
-    });
+    // The gemini-embedding-001 model only supports one piece of content per request.
+    // We use Promise.all to process all chunks in parallel.
+    const embeddingPromises = chunks.map(chunk => 
+      embed({
+        embedder: 'googleai/gemini-embedding-001',
+        content: chunk,
+        taskType: 'RETRIEVAL_DOCUMENT',
+      })
+    );
     
+    const embeddings = await Promise.all(embeddingPromises);
     return embeddings;
   }
 );
