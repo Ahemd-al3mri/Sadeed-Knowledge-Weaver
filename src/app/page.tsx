@@ -16,7 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
-import { UploadCloud, FileText, Loader, CheckCircle2, XCircle, Download, BookText, Tags, Key, Building } from 'lucide-react';
+import { UploadCloud, FileText, Loader, CheckCircle2, XCircle, Download, BookText, Tags, Key, Building, PlayCircle } from 'lucide-react';
 
 const fileToDataUri = (file: File): Promise<string> => {
   return new Promise((resolve, reject) => {
@@ -106,7 +106,6 @@ export default function Home() {
     if (newDocs.length > 0 && !selectedDocId) {
       setSelectedDocId(newDocs[0].id);
     }
-    newDocs.forEach(doc => processDocument(doc.id));
   };
   
   const handleDragEvents = (e: DragEvent<HTMLDivElement>, drag: boolean) => {
@@ -232,6 +231,188 @@ export default function Home() {
       default: return null;
     }
   };
+  
+  const renderContent = () => {
+    if (!selectedDocument) {
+      return (
+        <div className="flex flex-col items-center justify-center h-full border-2 border-dashed rounded-lg">
+          <FileText className="w-16 h-16 text-muted-foreground" />
+          <h2 className="mt-4 text-xl font-semibold font-headline">اختر مستند</h2>
+          <p className="text-muted-foreground">اختر مستندًا من القائمة لعرض تفاصيله.</p>
+        </div>
+      );
+    }
+
+    let content;
+    switch (selectedDocument.status) {
+      case 'pending':
+        content = (
+          <div className="flex flex-col items-center justify-center text-center p-8 h-full">
+            <p className="text-lg font-medium mb-4">هذا المستند جاهز للمعالجة.</p>
+            <p className="text-muted-foreground mb-6">انقر على الزر أدناه لبدء تحليل المحتوى واستخراج البيانات.</p>
+            <Button size="lg" onClick={() => processDocument(selectedDocument.id)}>
+              <PlayCircle className="ml-2 h-5 w-5" />
+              بدء معالجة المستند
+            </Button>
+          </div>
+        );
+        break;
+      case 'ocr':
+      case 'identification':
+      case 'metadata':
+      case 'chunking':
+      case 'embedding':
+        content = (
+          <div className="flex flex-col items-center justify-center text-center p-8 h-full">
+            <Loader className="h-12 w-12 animate-spin text-primary mb-4" />
+            <p className="text-lg font-medium">...جاري معالجة المستند</p>
+            <p className="text-muted-foreground">{selectedDocument.statusMessage}</p>
+          </div>
+        );
+        break;
+      case 'error':
+        content = (
+          <div className="flex flex-col items-center justify-center text-center p-8 h-full text-destructive">
+            <XCircle className="h-12 w-12 mb-4" />
+            <p className="text-lg font-medium">حدث خطأ</p>
+            <p className="text-sm">{selectedDocument.statusMessage}</p>
+          </div>
+        );
+        break;
+      case 'completed':
+        content = (
+          <Accordion type="single" collapsible defaultValue="metadata">
+            <AccordionItem value="metadata">
+              <AccordionTrigger className="font-headline"><Tags className="ml-2"/>البيانات الوصفية</AccordionTrigger>
+              <AccordionContent className="space-y-4 pt-2">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="namespace">فئة المستند</Label>
+                    <Select
+                      value={selectedDocument.metadata.namespace}
+                      onValueChange={(value) => handleMetadataChange(selectedDocument.id, 'namespace', value)}
+                    >
+                      <SelectTrigger id="namespace"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="laws">قوانين</SelectItem>
+                        <SelectItem value="decrees">مراسيم</SelectItem>
+                        <SelectItem value="regulations">لوائح</SelectItem>
+                        <SelectItem value="contracts">عقود</SelectItem>
+                        <SelectItem value="judgments">أحكام</SelectItem>
+                        <SelectItem value="Uncategorized">غير مصنف</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                   <div className="space-y-2">
+                    <Label htmlFor="doc-number">رقم المادة/المستند</Label>
+                    <Input
+                      id="doc-number"
+                      placeholder="مثال: قانون رقم 123"
+                      value={selectedDocument.metadata.articleNumber}
+                      onChange={(e) => handleMetadataChange(selectedDocument.id, 'articleNumber', e.target.value)}
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="doc-title">العنوان</Label>
+                  <Input
+                    id="doc-title"
+                    placeholder="عنوان المستند"
+                    value={selectedDocument.metadata.title}
+                    onChange={(e) => handleMetadataChange(selectedDocument.id, 'title', e.target.value)}
+                  />
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="doc-section">القسم</Label>
+                    <Input
+                      id="doc-section"
+                      placeholder="القسم أو الباب"
+                      value={selectedDocument.metadata.section}
+                      onChange={(e) => handleMetadataChange(selectedDocument.id, 'section', e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="doc-date">التاريخ</Label>
+                    <Input
+                      id="doc-date"
+                      type="date"
+                      value={selectedDocument.metadata.date}
+                      onChange={(e) => handleMetadataChange(selectedDocument.id, 'date', e.target.value)}
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="doc-issuedBy">جهة الإصدار</Label>
+                  <Input
+                    id="doc-issuedBy"
+                    placeholder="مثال: وزارة العدل"
+                    value={selectedDocument.metadata.issuedBy}
+                    onChange={(e) => handleMetadataChange(selectedDocument.id, 'issuedBy', e.target.value)}
+                  />
+                </div>
+                 <div className="space-y-2">
+                  <Label><Key className="inline-block ml-1 h-4 w-4" />الكلمات المفتاحية</Label>
+                   <div className="flex flex-wrap gap-2 pt-2">
+                    {selectedDocument.metadata.keywords.length > 0 ? selectedDocument.metadata.keywords.map((kw, i) => (
+                       <Badge key={i} variant="secondary">{kw}</Badge>
+                    )) : <p className="text-sm text-muted-foreground">لا توجد كلمات مفتاحية.</p>}
+                   </div>
+                 </div>
+              </AccordionContent>
+            </AccordionItem>
+            <AccordionItem value="chunks">
+              <AccordionTrigger className="font-headline"><BookText className="ml-2"/>وحدات المعرفة ({selectedDocument.chunks?.length || 0})</AccordionTrigger>
+              <AccordionContent>
+                <ScrollArea className="h-80 mt-2 p-3 border rounded-md bg-muted/50">
+                  {selectedDocument.chunks?.map((chunk, index) => (
+                    <div key={index} className="p-3 mb-2 bg-background rounded-md shadow-sm relative group">
+                      <Label htmlFor={`chunk-${index}`} className="text-xs text-muted-foreground">وحدة المعرفة #{index + 1}</Label>
+                      <Textarea
+                        id={`chunk-${index}`}
+                        defaultValue={chunk}
+                        onBlur={(e) => handleChunkBlur(selectedDocument.id, index, e.target.value)}
+                        disabled={updatingChunkIndex !== null}
+                        className="w-full mt-1 min-h-[100px] leading-relaxed bg-background disabled:opacity-80 disabled:cursor-not-allowed"
+                      />
+                      {updatingChunkIndex === index && (
+                        <div className="absolute top-4 right-4 flex items-center justify-center bg-background/80 w-[calc(100%-2rem)] h-[calc(100%-2rem)]">
+                          <div className="flex items-center gap-2 text-sm text-primary">
+                            <Loader className="h-4 w-4 animate-spin" />
+                            ...جاري تحديث التضمين
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </ScrollArea>
+              </AccordionContent>
+            </AccordionItem>
+          </Accordion>
+        );
+        break;
+      default:
+        content = null;
+    }
+
+    return (
+      <Card className="h-full flex flex-col">
+        <CardHeader>
+          <CardTitle className="font-headline truncate flex items-center gap-2"><FileText className="w-6 h-6"/>{selectedDocument.file.name}</CardTitle>
+          <CardDescription>
+            {selectedDocument.status === 'completed' && selectedDocument.identifiedType && (
+              <Badge variant="secondary">النوع: {selectedDocument.identifiedType} (بثقة {(selectedDocument.typeConfidence! * 100).toFixed(0)}%)</Badge>
+            )}
+            {selectedDocument.status === 'pending' && <Badge variant="outline">في انتظار المعالجة</Badge>}
+            {['error', 'ocr', 'identification', 'metadata', 'chunking', 'embedding'].includes(selectedDocument.status) && <Badge variant="destructive">{selectedDocument.statusMessage}</Badge>}
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="flex-1">
+          {content}
+        </CardContent>
+      </Card>
+    );
+  };
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -309,135 +490,7 @@ export default function Home() {
           </div>
 
           <div className="lg:col-span-2">
-            {selectedDocument ? (
-              <Card className="h-full">
-                <CardHeader>
-                  <CardTitle className="font-headline truncate flex items-center gap-2"><FileText className="w-6 h-6"/>{selectedDocument.file.name}</CardTitle>
-                  <CardDescription>
-                    {selectedDocument.identifiedType && (
-                      <Badge variant="secondary">النوع: {selectedDocument.identifiedType} (بثقة {(selectedDocument.typeConfidence! * 100).toFixed(0)}%)</Badge>
-                    )}
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <Accordion type="single" collapsible defaultValue="metadata">
-                    <AccordionItem value="metadata">
-                      <AccordionTrigger className="font-headline"><Tags className="ml-2"/>البيانات الوصفية</AccordionTrigger>
-                      <AccordionContent className="space-y-4 pt-2">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <div className="space-y-2">
-                            <Label htmlFor="namespace">فئة المستند</Label>
-                            <Select
-                              value={selectedDocument.metadata.namespace}
-                              onValueChange={(value) => handleMetadataChange(selectedDocument.id, 'namespace', value)}
-                            >
-                              <SelectTrigger id="namespace"><SelectValue /></SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="laws">قوانين</SelectItem>
-                                <SelectItem value="decrees">مراسيم</SelectItem>
-                                <SelectItem value="regulations">لوائح</SelectItem>
-                                <SelectItem value="contracts">عقود</SelectItem>
-                                <SelectItem value="judgments">أحكام</SelectItem>
-                                <SelectItem value="Uncategorized">غير مصنف</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </div>
-                           <div className="space-y-2">
-                            <Label htmlFor="doc-number">رقم المادة/المستند</Label>
-                            <Input
-                              id="doc-number"
-                              placeholder="مثال: قانون رقم 123"
-                              value={selectedDocument.metadata.articleNumber}
-                              onChange={(e) => handleMetadataChange(selectedDocument.id, 'articleNumber', e.target.value)}
-                            />
-                          </div>
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="doc-title">العنوان</Label>
-                          <Input
-                            id="doc-title"
-                            placeholder="عنوان المستند"
-                            value={selectedDocument.metadata.title}
-                            onChange={(e) => handleMetadataChange(selectedDocument.id, 'title', e.target.value)}
-                          />
-                        </div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <div className="space-y-2">
-                            <Label htmlFor="doc-section">القسم</Label>
-                            <Input
-                              id="doc-section"
-                              placeholder="القسم أو الباب"
-                              value={selectedDocument.metadata.section}
-                              onChange={(e) => handleMetadataChange(selectedDocument.id, 'section', e.target.value)}
-                            />
-                          </div>
-                          <div className="space-y-2">
-                            <Label htmlFor="doc-date">التاريخ</Label>
-                            <Input
-                              id="doc-date"
-                              type="date"
-                              value={selectedDocument.metadata.date}
-                              onChange={(e) => handleMetadataChange(selectedDocument.id, 'date', e.target.value)}
-                            />
-                          </div>
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="doc-issuedBy">جهة الإصدار</Label>
-                          <Input
-                            id="doc-issuedBy"
-                            placeholder="مثال: وزارة العدل"
-                            value={selectedDocument.metadata.issuedBy}
-                            onChange={(e) => handleMetadataChange(selectedDocument.id, 'issuedBy', e.target.value)}
-                          />
-                        </div>
-                         <div className="space-y-2">
-                          <Label><Key className="inline-block ml-1 h-4 w-4" />الكلمات المفتاحية</Label>
-                           <div className="flex flex-wrap gap-2 pt-2">
-                            {selectedDocument.metadata.keywords.length > 0 ? selectedDocument.metadata.keywords.map((kw, i) => (
-                               <Badge key={i} variant="secondary">{kw}</Badge>
-                            )) : <p className="text-sm text-muted-foreground">لا توجد كلمات مفتاحية.</p>}
-                           </div>
-                         </div>
-                      </AccordionContent>
-                    </AccordionItem>
-                    <AccordionItem value="chunks">
-                      <AccordionTrigger className="font-headline"><BookText className="ml-2"/>وحدات المعرفة ({selectedDocument.chunks?.length || 0})</AccordionTrigger>
-                      <AccordionContent>
-                        <ScrollArea className="h-80 mt-2 p-3 border rounded-md bg-muted/50">
-                          {selectedDocument.status === 'completed' && selectedDocument.chunks?.map((chunk, index) => (
-                            <div key={index} className="p-3 mb-2 bg-background rounded-md shadow-sm relative group">
-                              <Label htmlFor={`chunk-${index}`} className="text-xs text-muted-foreground">وحدة المعرفة #{index + 1}</Label>
-                              <Textarea
-                                id={`chunk-${index}`}
-                                defaultValue={chunk}
-                                onBlur={(e) => handleChunkBlur(selectedDocument.id, index, e.target.value)}
-                                disabled={updatingChunkIndex !== null}
-                                className="w-full mt-1 min-h-[100px] leading-relaxed bg-background disabled:opacity-80 disabled:cursor-not-allowed"
-                              />
-                              {updatingChunkIndex === index && (
-                                <div className="absolute top-4 right-4 flex items-center justify-center bg-background/80 w-[calc(100%-2rem)] h-[calc(100%-2rem)]">
-                                  <div className="flex items-center gap-2 text-sm text-primary">
-                                    <Loader className="h-4 w-4 animate-spin" />
-                                    ...جاري تحديث التضمين
-                                  </div>
-                                </div>
-                              )}
-                            </div>
-                          ))}
-                          {selectedDocument.status !== 'completed' && <p className="text-sm text-center text-muted-foreground">ستظهر المقاطع هنا بعد اكتمال المعالجة.</p>}
-                        </ScrollArea>
-                      </AccordionContent>
-                    </AccordionItem>
-                  </Accordion>
-                </CardContent>
-              </Card>
-            ) : (
-              <div className="flex flex-col items-center justify-center h-full border-2 border-dashed rounded-lg">
-                <FileText className="w-16 h-16 text-muted-foreground" />
-                <h2 className="mt-4 text-xl font-semibold font-headline">اختر مستند</h2>
-                <p className="text-muted-foreground">اختر مستندًا من القائمة لعرض تفاصيله.</p>
-              </div>
-            )}
+            {renderContent()}
           </div>
         </div>
       </main>
