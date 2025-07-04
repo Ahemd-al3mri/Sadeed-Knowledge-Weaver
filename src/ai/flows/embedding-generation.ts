@@ -30,8 +30,9 @@ const generateEmbeddingsFlow = ai.defineFlow(
   },
   async ({ chunks }) => {
     const embeddings = await embed({
-      embedder: 'googleai/text-embedding-004',
+      embedder: 'googleai/gemini-embedding-001',
       content: chunks,
+      taskType: 'RETRIEVAL_DOCUMENT',
     });
     
     return embeddings;
