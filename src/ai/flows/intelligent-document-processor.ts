@@ -346,57 +346,850 @@ class LawProcessor extends DocumentTypeProcessor {
 // Placeholder processors for other types
 class RoyalDecreeProcessor extends DocumentTypeProcessor {
   async process(content: string, ocrConfidence?: number) {
-    // Implementation following royal_decrees_instructions.md
-    return { chunks: [], metadata: {} as DocumentMetadata, notes: ['Royal decree processing not yet implemented'] };
+    const chunks: DocumentChunk[] = [];
+    const notes: string[] = [];
+    
+    const decreeNumber = this.extractDecreeNumber(content);
+    const decreeTitle = this.extractDecreeTitle(content);
+    const issuingAuthority = this.extractIssuingAuthority(content);
+    const issueDate = this.extractDate(content);
+    const articles = this.extractArticles(content);
+    
+    if (articles.length > 0) {
+      // Create separate chunks for each article
+      articles.forEach((article, index) => {
+        const chunk: DocumentChunk = {
+          id: this.generateChunkId('royal_decree_article', index),
+          type: 'royal_decrees',
+          namespace: 'royal_decrees',
+          content: article.text,
+          metadata: {
+            decree_number: decreeNumber,
+            decree_title: decreeTitle,
+            article_number: article.number,
+            issuing_authority: issuingAuthority,
+            issue_date: issueDate,
+            keywords: this.extractKeywords(article.text),
+            language: 'ar',
+            ocr_confidence: ocrConfidence,
+            source: 'الجريدة الرسمية - سلطنة عمان'
+          }
+        };
+        chunks.push(chunk);
+      });
+      notes.push(`Processed ${articles.length} royal decree articles`);
+    } else {
+      // Create single chunk for entire decree
+      const chunk: DocumentChunk = {
+        id: this.generateChunkId('royal_decree', 0),
+        type: 'royal_decrees',
+        namespace: 'royal_decrees',
+        content: content,
+        metadata: {
+          decree_number: decreeNumber,
+          decree_title: decreeTitle,
+          issuing_authority: issuingAuthority,
+          issue_date: issueDate,
+          keywords: this.extractKeywords(content),
+          language: 'ar',
+          ocr_confidence: ocrConfidence,
+          source: 'الجريدة الرسمية - سلطنة عمان'
+        }
+      };
+      chunks.push(chunk);
+      notes.push('Processed as single royal decree chunk');
+    }
+    
+    const metadata: DocumentMetadata = {
+      type: 'royal_decrees',
+      namespace: 'royal_decrees',
+      source: 'الجريدة الرسمية - سلطنة عمان',
+      language: 'ar',
+      processingDate: new Date().toISOString(),
+      ocrConfidence,
+      verified: (ocrConfidence || 0.95) > 0.9,
+      decreeNumber,
+      decreeTitle,
+      issuingAuthority,
+      issueDate
+    };
+    
+    return { chunks, metadata, notes };
+  }
+  
+  private extractDecreeNumber(content: string): string {
+    const match = content.match(/مرسوم سلطاني رقم\s+(\d+\/\d+)/i);
+    return match ? match[1] : '';
+  }
+  
+  private extractDecreeTitle(content: string): string {
+    const match = content.match(/مرسوم سلطاني[^:]*:([^\.]+)/i);
+    return match ? match[1].trim() : '';
+  }
+  
+  private extractIssuingAuthority(content: string): string {
+    return 'جلالة السلطان';
+  }
+  
+  private extractArticles(content: string): Array<{number: string, text: string}> {
+    const articles: Array<{number: string, text: string}> = [];
+    const articleMatches = content.match(/المادة\s+(\d+)[^:]*:([^المادة]*)/g);
+    
+    articleMatches?.forEach(match => {
+      const numberMatch = match.match(/المادة\s+(\d+)/);
+      const number = numberMatch ? numberMatch[1] : '';
+      const text = match.replace(/المادة\s+\d+[^:]*:/, '').trim();
+      articles.push({ number, text });
+    });
+    
+    return articles;
+  }
+  
+  private extractDate(content: string): string {
+    const dateMatch = content.match(/\d{4}-\d{2}-\d{2}|\d{1,2}\/\d{1,2}\/\d{4}/);
+    return dateMatch ? dateMatch[0] : '';
   }
 }
 
 class JudicialCivilProcessor extends DocumentTypeProcessor {
   async process(content: string, ocrConfidence?: number) {
-    // Implementation following judicial_civil_instructions.md
-    return { chunks: [], metadata: {} as DocumentMetadata, notes: ['Judicial civil processing not yet implemented'] };
+    const chunks: DocumentChunk[] = [];
+    const notes: string[] = [];
+    
+    const caseNumber = this.extractCaseNumber(content);
+    const caseTitle = this.extractCaseTitle(content);
+    const court = this.extractCourt(content);
+    const judgmentDate = this.extractJudgmentDate(content);
+    const parties = this.extractParties(content);
+    const legalPrinciple = this.extractLegalPrinciple(content);
+    
+    // Create chunk for the judicial ruling
+    const chunk: DocumentChunk = {
+      id: this.generateChunkId('judicial_civil', 0),
+      type: 'judicial_civil',
+      namespace: 'judicial_civil',
+      content: content,
+      metadata: {
+        case_number: caseNumber,
+        case_title: caseTitle,
+        court: court,
+        judgment_date: judgmentDate,
+        parties: parties,
+        legal_principle: legalPrinciple,
+        keywords: this.extractKeywords(content),
+        language: 'ar',
+        ocr_confidence: ocrConfidence,
+        source: 'المحاكم المدنية - سلطنة عمان'
+      }
+    };
+    
+    chunks.push(chunk);
+    notes.push('Processed civil judicial case');
+    
+    const metadata: DocumentMetadata = {
+      type: 'judicial_civil',
+      namespace: 'judicial_civil',
+      source: 'المحاكم المدنية - سلطنة عمان',
+      language: 'ar',
+      processingDate: new Date().toISOString(),
+      ocrConfidence,
+      verified: (ocrConfidence || 0.95) > 0.9,
+      caseNumber,
+      court,
+      judgmentDate
+    };
+    
+    return { chunks, metadata, notes };
+  }
+  
+  private extractCaseNumber(content: string): string {
+    const match = content.match(/دعوى رقم\s+(\d+\/\d+)|القضية رقم\s+(\d+\/\d+)/i);
+    return match ? (match[1] || match[2]) : '';
+  }
+  
+  private extractCaseTitle(content: string): string {
+    const match = content.match(/في الدعوى\s+([^،]+)/i);
+    return match ? match[1].trim() : '';
+  }
+  
+  private extractCourt(content: string): string {
+    const match = content.match(/المحكمة\s+([^،]+)/i);
+    return match ? match[1].trim() : 'المحكمة المدنية';
+  }
+  
+  private extractJudgmentDate(content: string): string {
+    const match = content.match(/بتاريخ\s+(\d{1,2}\/\d{1,2}\/\d{4})/i);
+    return match ? match[1] : '';
+  }
+  
+  private extractParties(content: string): string[] {
+    const parties: string[] = [];
+    const plaintiffMatch = content.match(/المدعي[:\s]+([^،\n]+)/i);
+    const defendantMatch = content.match(/المدعى عليه[:\s]+([^،\n]+)/i);
+    
+    if (plaintiffMatch) parties.push(`المدعي: ${plaintiffMatch[1].trim()}`);
+    if (defendantMatch) parties.push(`المدعى عليه: ${defendantMatch[1].trim()}`);
+    
+    return parties;
+  }
+  
+  private extractLegalPrinciple(content: string): string {
+    const match = content.match(/المبدأ القانوني[:\s]+([^\.]+)/i);
+    return match ? match[1].trim() : '';
   }
 }
 
 class JudicialCriminalProcessor extends DocumentTypeProcessor {
   async process(content: string, ocrConfidence?: number) {
-    return { chunks: [], metadata: {} as DocumentMetadata, notes: ['Judicial criminal processing not yet implemented'] };
+    const chunks: DocumentChunk[] = [];
+    const notes: string[] = [];
+    
+    const caseNumber = this.extractCaseNumber(content);
+    const crime = this.extractCrime(content);
+    const court = this.extractCourt(content);
+    const judgmentDate = this.extractJudgmentDate(content);
+    const accused = this.extractAccused(content);
+    const verdict = this.extractVerdict(content);
+    const legalBasis = this.extractLegalBasis(content);
+    
+    // Create chunk for the criminal ruling
+    const chunk: DocumentChunk = {
+      id: this.generateChunkId('judicial_criminal', 0),
+      type: 'judicial_criminal',
+      namespace: 'judicial_criminal',
+      content: content,
+      metadata: {
+        case_number: caseNumber,
+        crime: crime,
+        court: court,
+        judgment_date: judgmentDate,
+        accused: accused,
+        verdict: verdict,
+        legal_basis: legalBasis,
+        keywords: this.extractKeywords(content),
+        language: 'ar',
+        ocr_confidence: ocrConfidence,
+        source: 'المحاكم الجنائية - سلطنة عمان'
+      }
+    };
+    
+    chunks.push(chunk);
+    notes.push('Processed criminal judicial case');
+    
+    const metadata: DocumentMetadata = {
+      type: 'judicial_criminal',
+      namespace: 'judicial_criminal',
+      source: 'المحاكم الجنائية - سلطنة عمان',
+      language: 'ar',
+      processingDate: new Date().toISOString(),
+      ocrConfidence,
+      verified: (ocrConfidence || 0.95) > 0.9,
+      caseNumber,
+      court,
+      judgmentDate,
+      crime
+    };
+    
+    return { chunks, metadata, notes };
+  }
+  
+  private extractCaseNumber(content: string): string {
+    const match = content.match(/القضية الجنائية رقم\s+(\d+\/\d+)|الدعوى الجنائية رقم\s+(\d+\/\d+)/i);
+    return match ? (match[1] || match[2]) : '';
+  }
+  
+  private extractCrime(content: string): string {
+    const match = content.match(/جريمة\s+([^،\n]+)|التهمة\s+([^،\n]+)/i);
+    return match ? (match[1] || match[2]).trim() : '';
+  }
+  
+  private extractCourt(content: string): string {
+    const match = content.match(/المحكمة\s+([^،]+)/i);
+    return match ? match[1].trim() : 'المحكمة الجنائية';
+  }
+  
+  private extractJudgmentDate(content: string): string {
+    const match = content.match(/بتاريخ\s+(\d{1,2}\/\d{1,2}\/\d{4})/i);
+    return match ? match[1] : '';
+  }
+  
+  private extractAccused(content: string): string {
+    const match = content.match(/المتهم[:\s]+([^،\n]+)/i);
+    return match ? match[1].trim() : '';
+  }
+  
+  private extractVerdict(content: string): string {
+    const match = content.match(/الحكم[:\s]+([^\.]+)/i);
+    return match ? match[1].trim() : '';
+  }
+  
+  private extractLegalBasis(content: string): string[] {
+    const matches = content.match(/المادة\s+\d+|القانون رقم\s+\d+\/\d+/g);
+    return matches || [];
   }
 }
 
 class MinisterialDecisionProcessor extends DocumentTypeProcessor {
   async process(content: string, ocrConfidence?: number) {
-    return { chunks: [], metadata: {} as DocumentMetadata, notes: ['Ministerial decision processing not yet implemented'] };
+    const chunks: DocumentChunk[] = [];
+    const notes: string[] = [];
+    
+    const decisionNumber = this.extractDecisionNumber(content);
+    const decisionTitle = this.extractDecisionTitle(content);
+    const ministry = this.extractMinistry(content);
+    const issueDate = this.extractIssueDate(content);
+    const legalBasis = this.extractLegalBasis(content);
+    const articles = this.extractArticles(content);
+    
+    if (articles.length > 0) {
+      // Create separate chunks for each article
+      articles.forEach((article, index) => {
+        const chunk: DocumentChunk = {
+          id: this.generateChunkId('ministerial_article', index),
+          type: 'ministerial_decisions',
+          namespace: 'ministerial_decisions',
+          content: article.text,
+          metadata: {
+            decision_number: decisionNumber,
+            decision_title: decisionTitle,
+            ministry: ministry,
+            issue_date: issueDate,
+            article_number: article.number,
+            legal_basis: legalBasis,
+            keywords: this.extractKeywords(article.text),
+            language: 'ar',
+            ocr_confidence: ocrConfidence,
+            source: 'القرارات الوزارية - سلطنة عمان'
+          }
+        };
+        chunks.push(chunk);
+      });
+      notes.push(`Processed ${articles.length} ministerial decision articles`);
+    } else {
+      // Create single chunk for entire decision
+      const chunk: DocumentChunk = {
+        id: this.generateChunkId('ministerial_decision', 0),
+        type: 'ministerial_decisions',
+        namespace: 'ministerial_decisions',
+        content: content,
+        metadata: {
+          decision_number: decisionNumber,
+          decision_title: decisionTitle,
+          ministry: ministry,
+          issue_date: issueDate,
+          legal_basis: legalBasis,
+          keywords: this.extractKeywords(content),
+          language: 'ar',
+          ocr_confidence: ocrConfidence,
+          source: 'القرارات الوزارية - سلطنة عمان'
+        }
+      };
+      chunks.push(chunk);
+      notes.push('Processed as single ministerial decision chunk');
+    }
+    
+    const metadata: DocumentMetadata = {
+      type: 'ministerial_decisions',
+      namespace: 'ministerial_decisions',
+      source: 'القرارات الوزارية - سلطنة عمان',
+      language: 'ar',
+      processingDate: new Date().toISOString(),
+      ocrConfidence,
+      verified: (ocrConfidence || 0.95) > 0.9,
+      decisionNumber,
+      ministry,
+      issueDate
+    };
+    
+    return { chunks, metadata, notes };
+  }
+  
+  private extractDecisionNumber(content: string): string {
+    const match = content.match(/قرار وزاري رقم\s+(\d+\/\d+)|قرار رقم\s+(\d+\/\d+)/i);
+    return match ? (match[1] || match[2]) : '';
+  }
+  
+  private extractDecisionTitle(content: string): string {
+    const match = content.match(/قرار[^:]*:([^\.]+)/i);
+    return match ? match[1].trim() : '';
+  }
+  
+  private extractMinistry(content: string): string {
+    const match = content.match(/وزارة\s+([^،\n]+)/i);
+    return match ? match[1].trim() : '';
+  }
+  
+  private extractIssueDate(content: string): string {
+    const match = content.match(/صدر في\s+(\d{1,2}\/\d{1,2}\/\d{4})|بتاريخ\s+(\d{1,2}\/\d{1,2}\/\d{4})/i);
+    return match ? (match[1] || match[2]) : '';
+  }
+  
+  private extractLegalBasis(content: string): string[] {
+    const matches = content.match(/المادة\s+\d+|القانون رقم\s+\d+\/\d+|اللائحة التنفيذية/g);
+    return matches || [];
+  }
+  
+  private extractArticles(content: string): Array<{number: string, text: string}> {
+    const articles: Array<{number: string, text: string}> = [];
+    const articleMatches = content.match(/المادة\s+(\d+)[^:]*:([^المادة]*)/g);
+    
+    articleMatches?.forEach(match => {
+      const numberMatch = match.match(/المادة\s+(\d+)/);
+      const number = numberMatch ? numberMatch[1] : '';
+      const text = match.replace(/المادة\s+\d+[^:]*:/, '').trim();
+      articles.push({ number, text });
+    });
+    
+    return articles;
   }
 }
 
 class RegulationProcessor extends DocumentTypeProcessor {
   async process(content: string, ocrConfidence?: number) {
-    return { chunks: [], metadata: {} as DocumentMetadata, notes: ['Regulation processing not yet implemented'] };
+    const chunks: DocumentChunk[] = [];
+    const notes: string[] = [];
+    
+    const regulationTitle = this.extractRegulationTitle(content);
+    const regulationNumber = this.extractRegulationNumber(content);
+    const issuingAuthority = this.extractIssuingAuthority(content);
+    const issueDate = this.extractIssueDate(content);
+    const articles = this.extractArticles(content);
+    
+    if (articles.length > 0) {
+      // Create separate chunks for each article
+      articles.forEach((article, index) => {
+        const chunk: DocumentChunk = {
+          id: this.generateChunkId('regulation_article', index),
+          type: 'regulations',
+          namespace: 'regulations',
+          content: article.text,
+          metadata: {
+            regulation_title: regulationTitle,
+            regulation_number: regulationNumber,
+            issuing_authority: issuingAuthority,
+            issue_date: issueDate,
+            article_number: article.number,
+            section: article.section,
+            keywords: this.extractKeywords(article.text),
+            language: 'ar',
+            ocr_confidence: ocrConfidence,
+            source: 'اللوائح التنفيذية - سلطنة عمان'
+          }
+        };
+        chunks.push(chunk);
+      });
+      notes.push(`Processed ${articles.length} regulation articles`);
+    } else {
+      // Create single chunk for entire regulation
+      const chunk: DocumentChunk = {
+        id: this.generateChunkId('regulation', 0),
+        type: 'regulations',
+        namespace: 'regulations',
+        content: content,
+        metadata: {
+          regulation_title: regulationTitle,
+          regulation_number: regulationNumber,
+          issuing_authority: issuingAuthority,
+          issue_date: issueDate,
+          keywords: this.extractKeywords(content),
+          language: 'ar',
+          ocr_confidence: ocrConfidence,
+          source: 'اللوائح التنفيذية - سلطنة عمان'
+        }
+      };
+      chunks.push(chunk);
+      notes.push('Processed as single regulation chunk');
+    }
+    
+    const metadata: DocumentMetadata = {
+      type: 'regulations',
+      namespace: 'regulations',
+      source: 'اللوائح التنفيذية - سلطنة عمان',
+      language: 'ar',
+      processingDate: new Date().toISOString(),
+      ocrConfidence,
+      verified: (ocrConfidence || 0.95) > 0.9,
+      regulationTitle,
+      regulationNumber,
+      issuingAuthority
+    };
+    
+    return { chunks, metadata, notes };
+  }
+  
+  private extractRegulationTitle(content: string): string {
+    const match = content.match(/لائحة\s+([^،\n]+)/i);
+    return match ? match[1].trim() : '';
+  }
+  
+  private extractRegulationNumber(content: string): string {
+    const match = content.match(/لائحة رقم\s+(\d+\/\d+)/i);
+    return match ? match[1] : '';
+  }
+  
+  private extractIssuingAuthority(content: string): string {
+    const match = content.match(/صادرة عن\s+([^،\n]+)/i);
+    return match ? match[1].trim() : '';
+  }
+  
+  private extractIssueDate(content: string): string {
+    const match = content.match(/صدرت في\s+(\d{1,2}\/\d{1,2}\/\d{4})|بتاريخ\s+(\d{1,2}\/\d{1,2}\/\d{4})/i);
+    return match ? (match[1] || match[2]) : '';
+  }
+  
+  private extractArticles(content: string): Array<{number: string, text: string, section: string}> {
+    const articles: Array<{number: string, text: string, section: string}> = [];
+    const articleMatches = content.match(/المادة\s+(\d+)[^:]*:([^المادة]*)/g);
+    
+    articleMatches?.forEach(match => {
+      const numberMatch = match.match(/المادة\s+(\d+)/);
+      const number = numberMatch ? numberMatch[1] : '';
+      const text = match.replace(/المادة\s+\d+[^:]*:/, '').trim();
+      const section = this.findSection(content, match);
+      
+      articles.push({ number, text, section });
+    });
+    
+    return articles;
+  }
+  
+  private findSection(content: string, articleText: string): string {
+    const position = content.indexOf(articleText);
+    const beforeText = content.substring(0, position);
+    const sectionMatch = beforeText.match(/(الباب|الفصل)\s+[^:]+/g);
+    return sectionMatch ? sectionMatch[sectionMatch.length - 1] : '';
   }
 }
 
 class RoyalOrderProcessor extends DocumentTypeProcessor {
   async process(content: string, ocrConfidence?: number) {
-    return { chunks: [], metadata: {} as DocumentMetadata, notes: ['Royal order processing not yet implemented'] };
+    const chunks: DocumentChunk[] = [];
+    const notes: string[] = [];
+    
+    const orderNumber = this.extractOrderNumber(content);
+    const orderTitle = this.extractOrderTitle(content);
+    const recipientAuthority = this.extractRecipientAuthority(content);
+    const issueDate = this.extractIssueDate(content);
+    const orderContent = this.extractOrderContent(content);
+    
+    // Create chunk for the royal order
+    const chunk: DocumentChunk = {
+      id: this.generateChunkId('royal_order', 0),
+      type: 'royal_orders',
+      namespace: 'royal_orders',
+      content: orderContent || content,
+      metadata: {
+        order_number: orderNumber,
+        order_title: orderTitle,
+        recipient_authority: recipientAuthority,
+        issue_date: issueDate,
+        keywords: this.extractKeywords(content),
+        language: 'ar',
+        ocr_confidence: ocrConfidence,
+        source: 'الأوامر السلطانية - سلطنة عمان'
+      }
+    };
+    
+    chunks.push(chunk);
+    notes.push('Processed royal order');
+    
+    const metadata: DocumentMetadata = {
+      type: 'royal_orders',
+      namespace: 'royal_orders',
+      source: 'الأوامر السلطانية - سلطنة عمان',
+      language: 'ar',
+      processingDate: new Date().toISOString(),
+      ocrConfidence,
+      verified: (ocrConfidence || 0.95) > 0.9,
+      orderNumber,
+      recipientAuthority,
+      issueDate
+    };
+    
+    return { chunks, metadata, notes };
+  }
+  
+  private extractOrderNumber(content: string): string {
+    const match = content.match(/أمر سلطاني رقم\s+(\d+\/\d+)/i);
+    return match ? match[1] : '';
+  }
+  
+  private extractOrderTitle(content: string): string {
+    const match = content.match(/أمر سلطاني[^:]*:([^\.]+)/i);
+    return match ? match[1].trim() : '';
+  }
+  
+  private extractRecipientAuthority(content: string): string {
+    const match = content.match(/إلى\s+([^،\n]+)/i);
+    return match ? match[1].trim() : '';
+  }
+  
+  private extractIssueDate(content: string): string {
+    const match = content.match(/صدر في\s+(\d{1,2}\/\d{1,2}\/\d{4})|بتاريخ\s+(\d{1,2}\/\d{1,2}\/\d{4})/i);
+    return match ? (match[1] || match[2]) : '';
+  }
+  
+  private extractOrderContent(content: string): string {
+    const match = content.match(/نأمر بما يلي[:\s]*([^]*)/i);
+    return match ? match[1].trim() : '';
   }
 }
 
 class JudicialPrincipleProcessor extends DocumentTypeProcessor {
   async process(content: string, ocrConfidence?: number) {
-    return { chunks: [], metadata: {} as DocumentMetadata, notes: ['Judicial principle processing not yet implemented'] };
+    const chunks: DocumentChunk[] = [];
+    const notes: string[] = [];
+    
+    const principleNumber = this.extractPrincipleNumber(content);
+    const principleTitle = this.extractPrincipleTitle(content);
+    const court = this.extractCourt(content);
+    const caseNumbers = this.extractCaseNumbers(content);
+    const legalPrinciple = this.extractLegalPrinciple(content);
+    const legalBasis = this.extractLegalBasis(content);
+    
+    // Create chunk for the judicial principle
+    const chunk: DocumentChunk = {
+      id: this.generateChunkId('judicial_principle', 0),
+      type: 'judicial_principles',
+      namespace: 'judicial_principles',
+      content: legalPrinciple || content,
+      metadata: {
+        principle_number: principleNumber,
+        principle_title: principleTitle,
+        court: court,
+        case_numbers: caseNumbers,
+        legal_principle: legalPrinciple,
+        legal_basis: legalBasis,
+        keywords: this.extractKeywords(content),
+        language: 'ar',
+        ocr_confidence: ocrConfidence,
+        source: 'المبادئ القضائية - سلطنة عمان'
+      }
+    };
+    
+    chunks.push(chunk);
+    notes.push('Processed judicial principle');
+    
+    const metadata: DocumentMetadata = {
+      type: 'judicial_principles',
+      namespace: 'judicial_principles',
+      source: 'المبادئ القضائية - سلطنة عمان',
+      language: 'ar',
+      processingDate: new Date().toISOString(),
+      ocrConfidence,
+      verified: (ocrConfidence || 0.95) > 0.9,
+      principleNumber,
+      court,
+      caseNumbers
+    };
+    
+    return { chunks, metadata, notes };
+  }
+  
+  private extractPrincipleNumber(content: string): string {
+    const match = content.match(/مبدأ رقم\s+(\d+)|المبدأ رقم\s+(\d+)/i);
+    return match ? (match[1] || match[2]) : '';
+  }
+  
+  private extractPrincipleTitle(content: string): string {
+    const match = content.match(/مبدأ[^:]*:([^\.]+)/i);
+    return match ? match[1].trim() : '';
+  }
+  
+  private extractCourt(content: string): string {
+    const match = content.match(/المحكمة العليا|محكمة الاستئناف|المحكمة الابتدائية/i);
+    return match ? match[0] : 'المحكمة العليا';
+  }
+  
+  private extractCaseNumbers(content: string): string[] {
+    const matches = content.match(/القضية رقم\s+(\d+\/\d+)/g);
+    return matches ? matches.map(m => m.replace(/القضية رقم\s+/, '')) : [];
+  }
+  
+  private extractLegalPrinciple(content: string): string {
+    const match = content.match(/المبدأ[:\s]+([^]*?)(?=الأساس القانوني|$)/i);
+    return match ? match[1].trim() : '';
+  }
+  
+  private extractLegalBasis(content: string): string[] {
+    const matches = content.match(/المادة\s+\d+|القانون رقم\s+\d+\/\d+/g);
+    return matches || [];
   }
 }
 
 class IndexProcessor extends DocumentTypeProcessor {
   async process(content: string, ocrConfidence?: number) {
-    return { chunks: [], metadata: {} as DocumentMetadata, notes: ['Index processing not yet implemented'] };
+    const chunks: DocumentChunk[] = [];
+    const notes: string[] = [];
+    
+    const indexTitle = this.extractIndexTitle(content);
+    const indexEntries = this.extractIndexEntries(content);
+    
+    if (indexEntries.length > 0) {
+      // Create separate chunks for each index entry
+      indexEntries.forEach((entry, index) => {
+        const chunk: DocumentChunk = {
+          id: this.generateChunkId('index_entry', index),
+          type: 'indexes',
+          namespace: 'indexes',
+          content: entry.content,
+          metadata: {
+            index_title: indexTitle,
+            entry_title: entry.title,
+            page_reference: entry.pageRef,
+            keywords: this.extractKeywords(entry.content),
+            language: 'ar',
+            ocr_confidence: ocrConfidence,
+            source: 'فهارس قانونية - سلطنة عمان'
+          }
+        };
+        chunks.push(chunk);
+      });
+      notes.push(`Processed ${indexEntries.length} index entries`);
+    } else {
+      // Create single chunk for entire index
+      const chunk: DocumentChunk = {
+        id: this.generateChunkId('index', 0),
+        type: 'indexes',
+        namespace: 'indexes',
+        content: content,
+        metadata: {
+          index_title: indexTitle,
+          keywords: this.extractKeywords(content),
+          language: 'ar',
+          ocr_confidence: ocrConfidence,
+          source: 'فهارس قانونية - سلطنة عمان'
+        }
+      };
+      chunks.push(chunk);
+      notes.push('Processed as single index chunk');
+    }
+    
+    const metadata: DocumentMetadata = {
+      type: 'indexes',
+      namespace: 'indexes',
+      source: 'فهارس قانونية - سلطنة عمان',
+      language: 'ar',
+      processingDate: new Date().toISOString(),
+      ocrConfidence,
+      verified: (ocrConfidence || 0.95) > 0.9,
+      indexTitle,
+      totalEntries: indexEntries.length
+    };
+    
+    return { chunks, metadata, notes };
+  }
+  
+  private extractIndexTitle(content: string): string {
+    const match = content.match(/فهرس\s+([^،\n]+)/i);
+    return match ? match[1].trim() : '';
+  }
+  
+  private extractIndexEntries(content: string): Array<{title: string, content: string, pageRef: string}> {
+    const entries: Array<{title: string, content: string, pageRef: string}> = [];
+    const entryMatches = content.match(/([^،\n]+)\s+\.{2,}\s*(\d+)/g);
+    
+    entryMatches?.forEach(match => {
+      const parts = match.split(/\.{2,}/);
+      if (parts.length === 2) {
+        const title = parts[0].trim();
+        const pageRef = parts[1].trim();
+        entries.push({ title, content: title, pageRef });
+      }
+    });
+    
+    return entries;
   }
 }
 
 class TemplateProcessor extends DocumentTypeProcessor {
   async process(content: string, ocrConfidence?: number) {
-    return { chunks: [], metadata: {} as DocumentMetadata, notes: ['Template processing not yet implemented'] };
+    const chunks: DocumentChunk[] = [];
+    const notes: string[] = [];
+    
+    const templateTitle = this.extractTemplateTitle(content);
+    const templateType = this.extractTemplateType(content);
+    const sections = this.extractSections(content);
+    
+    if (sections.length > 0) {
+      // Create separate chunks for each template section
+      sections.forEach((section, index) => {
+        const chunk: DocumentChunk = {
+          id: this.generateChunkId('template_section', index),
+          type: 'templates',
+          namespace: 'templates',
+          content: section.content,
+          metadata: {
+            template_title: templateTitle,
+            template_type: templateType,
+            section_title: section.title,
+            keywords: this.extractKeywords(section.content),
+            language: 'ar',
+            ocr_confidence: ocrConfidence,
+            source: 'نماذج قانونية - سلطنة عمان'
+          }
+        };
+        chunks.push(chunk);
+      });
+      notes.push(`Processed ${sections.length} template sections`);
+    } else {
+      // Create single chunk for entire template
+      const chunk: DocumentChunk = {
+        id: this.generateChunkId('template', 0),
+        type: 'templates',
+        namespace: 'templates',
+        content: content,
+        metadata: {
+          template_title: templateTitle,
+          template_type: templateType,
+          keywords: this.extractKeywords(content),
+          language: 'ar',
+          ocr_confidence: ocrConfidence,
+          source: 'نماذج قانونية - سلطنة عمان'
+        }
+      };
+      chunks.push(chunk);
+      notes.push('Processed as single template chunk');
+    }
+    
+    const metadata: DocumentMetadata = {
+      type: 'templates',
+      namespace: 'templates',
+      source: 'نماذج قانونية - سلطنة عمان',
+      language: 'ar',
+      processingDate: new Date().toISOString(),
+      ocrConfidence,
+      verified: (ocrConfidence || 0.95) > 0.9,
+      templateTitle,
+      templateType,
+      totalSections: sections.length
+    };
+    
+    return { chunks, metadata, notes };
+  }
+  
+  private extractTemplateTitle(content: string): string {
+    const match = content.match(/نموذج\s+([^،\n]+)/i);
+    return match ? match[1].trim() : '';
+  }
+  
+  private extractTemplateType(content: string): string {
+    const match = content.match(/عقد|اتفاقية|طلب|تظلم|شكوى|استمارة/i);
+    return match ? match[0] : 'نموذج';
+  }
+  
+  private extractSections(content: string): Array<{title: string, content: string}> {
+    const sections: Array<{title: string, content: string}> = [];
+    const sectionMatches = content.match(/(البند|الفقرة|القسم)\s+\d+[^:]*:([^(البند|الفقرة|القسم)]*)/g);
+    
+    sectionMatches?.forEach(match => {
+      const titleMatch = match.match(/(البند|الفقرة|القسم)\s+\d+[^:]*/);
+      const title = titleMatch ? titleMatch[0] : '';
+      const content = match.replace(/^[^:]*:/, '').trim();
+      sections.push({ title, content });
+    });
+    
+    return sections;
   }
 }
 
