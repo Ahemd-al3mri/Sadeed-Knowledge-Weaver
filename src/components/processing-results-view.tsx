@@ -3,6 +3,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { AnnotationViewer } from './annotation-viewer';
 import { 
   Download, 
   Eye, 
@@ -11,7 +13,8 @@ import {
   Clock,
   Target,
   Hash,
-  Database
+  Database,
+  Tag
 } from 'lucide-react';
 
 interface ProcessedDocument {
@@ -26,6 +29,11 @@ interface ProcessedDocument {
   metadata?: Record<string, any>;
   processingTime?: number;
   errors?: string[];
+  // Enhanced with annotation support
+  annotations?: any[];
+  legalStructure?: any;
+  boundingBoxes?: any[];
+  extractedText?: string;
 }
 
 interface ProcessingResultsViewProps {
@@ -184,142 +192,221 @@ export function ProcessingResultsView({
           <CardContent>
             {selectedDocument ? (
               <div className="space-y-6">
-                {/* Basic Information */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-3">
-                    <div>
-                      <p className="text-sm font-medium text-muted-foreground">اسم الملف</p>
-                      <p className="text-sm break-words">{selectedDocument.file.name}</p>
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium text-muted-foreground">حجم الملف</p>
-                      <p className="text-sm">{(selectedDocument.file.size / 1024).toFixed(1)} KB</p>
-                    </div>
-                    {selectedDocument.contentHash && (
-                      <div>
-                        <p className="text-sm font-medium text-muted-foreground">بصمة المحتوى</p>
-                        <p className="text-xs font-mono break-all">
-                          {selectedDocument.contentHash.substring(0, 16)}...
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                  
-                  <div className="space-y-3">
-                    {selectedDocument.classification && (
-                      <div>
-                        <p className="text-sm font-medium text-muted-foreground">نوع المستند</p>
-                        <Badge className={getClassificationColor(selectedDocument.classification)}>
+                {/* Header with document info */}
+                <div className="flex items-center justify-between pb-4 border-b">
+                  <div>
+                    <h2 className="text-xl font-semibold mb-1">{selectedDocument.file.name}</h2>
+                    <div className="flex items-center gap-3">
+                      <Badge className={getStatusColor(selectedDocument.status)}>
+                        {selectedDocument.statusMessage}
+                      </Badge>
+                      {selectedDocument.classification && (
+                        <Badge variant="outline" className={getClassificationColor(selectedDocument.classification)}>
                           {selectedDocument.classification}
                         </Badge>
-                      </div>
-                    )}
-                    {selectedDocument.confidence && (
-                      <div>
-                        <p className="text-sm font-medium text-muted-foreground">مستوى الثقة</p>
-                        <div className="flex items-center gap-2">
-                          <div className="flex-1 bg-gray-200 rounded-full h-2">
-                            <div 
-                              className="bg-blue-500 h-2 rounded-full transition-all"
-                              style={{ width: `${selectedDocument.confidence * 100}%` }}
-                            />
-                          </div>
-                          <span className="text-sm font-medium">
-                            {(selectedDocument.confidence * 100).toFixed(1)}%
-                          </span>
-                        </div>
-                      </div>
-                    )}
-                    {selectedDocument.processingTime && (
-                      <div>
-                        <p className="text-sm font-medium text-muted-foreground">وقت المعالجة</p>
-                        <p className="text-sm">{(selectedDocument.processingTime / 1000).toFixed(2)} ثانية</p>
-                      </div>
-                    )}
+                      )}
+                    </div>
                   </div>
+                  <Button variant="outline" className="gap-2">
+                    <Download className="h-4 w-4" />
+                    تصدير
+                  </Button>
                 </div>
 
-                {/* Metadata */}
-                {selectedDocument.metadata && Object.keys(selectedDocument.metadata).length > 0 && (
-                  <div>
-                    <h3 className="text-lg font-medium mb-3">البيانات الوصفية</h3>
-                    <div className="bg-gray-50 rounded-lg p-4">
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        {Object.entries(selectedDocument.metadata).map(([key, value]) => (
-                          <div key={key} className="flex flex-col">
-                            <span className="text-xs font-medium text-muted-foreground uppercase">
-                              {key}
-                            </span>
-                            <span className="text-sm mt-1">
-                              {Array.isArray(value) ? value.join(', ') : String(value)}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                )}
+                {/* Main content with tabs */}
+                <Tabs defaultValue="overview" className="w-full">
+                  <TabsList className="grid w-full grid-cols-4">
+                    <TabsTrigger value="overview">نظرة عامة</TabsTrigger>
+                    <TabsTrigger value="chunks">مقاطع المحتوى</TabsTrigger>
+                    <TabsTrigger value="annotations">التعليقات التوضيحية</TabsTrigger>
+                    <TabsTrigger value="text">النص المستخرج</TabsTrigger>
+                  </TabsList>
 
-                {/* Chunks */}
-                {selectedDocument.chunks && selectedDocument.chunks.length > 0 && (
-                  <div>
-                    <div className="flex items-center justify-between mb-3">
-                      <h3 className="text-lg font-medium">
-                        مقاطع المحتوى ({selectedDocument.chunks.length})
-                      </h3>
-                      <Button size="sm" variant="outline" className="gap-2">
-                        <Database className="h-4 w-4" />
-                        حفظ في قاعدة البيانات
-                      </Button>
-                    </div>
-                    <ScrollArea className="h-64">
+                  <TabsContent value="overview" className="space-y-4">
+                    {/* Document info and metadata */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div className="space-y-3">
-                        {selectedDocument.chunks.map((chunk, index) => (
-                          <div key={index} className="border rounded-lg p-3">
-                            <div className="flex items-center justify-between mb-2">
-                              <span className="text-sm font-medium text-muted-foreground">
-                                مقطع {index + 1}
-                              </span>
-                              {onEditChunk && (
-                                <Button 
-                                  size="sm" 
-                                  variant="ghost"
-                                  className="gap-2"
-                                  onClick={() => {
-                                    const newContent = prompt('تحرير المقطع:', chunk);
-                                    if (newContent && newContent !== chunk) {
-                                      onEditChunk(selectedDocument.id, index, newContent);
-                                    }
-                                  }}
-                                >
-                                  <Edit className="h-3 w-3" />
-                                  تحرير
-                                </Button>
-                              )}
-                            </div>
-                            <p className="text-sm text-gray-700 leading-relaxed">
-                              {chunk}
+                        <div>
+                          <p className="text-sm font-medium text-muted-foreground">اسم الملف</p>
+                          <p className="text-sm break-words">{selectedDocument.file.name}</p>
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium text-muted-foreground">حجم الملف</p>
+                          <p className="text-sm">{(selectedDocument.file.size / 1024).toFixed(1)} KB</p>
+                        </div>
+                        {selectedDocument.contentHash && (
+                          <div>
+                            <p className="text-sm font-medium text-muted-foreground">بصمة المحتوى</p>
+                            <p className="text-xs font-mono break-all">
+                              {selectedDocument.contentHash.substring(0, 16)}...
                             </p>
                           </div>
-                        ))}
+                        )}
                       </div>
-                    </ScrollArea>
-                  </div>
-                )}
-
-                {/* Errors */}
-                {selectedDocument.errors && selectedDocument.errors.length > 0 && (
-                  <div>
-                    <h3 className="text-lg font-medium mb-3 text-red-600">الأخطاء</h3>
-                    <div className="space-y-2">
-                      {selectedDocument.errors.map((error, index) => (
-                        <div key={index} className="p-3 bg-red-50 border border-red-200 rounded-lg">
-                          <p className="text-sm text-red-800">{error}</p>
-                        </div>
-                      ))}
+                      
+                      <div className="space-y-3">
+                        {selectedDocument.classification && (
+                          <div>
+                            <p className="text-sm font-medium text-muted-foreground">نوع المستند</p>
+                            <Badge className={getClassificationColor(selectedDocument.classification)}>
+                              {selectedDocument.classification}
+                            </Badge>
+                          </div>
+                        )}
+                        {selectedDocument.confidence && (
+                          <div>
+                            <p className="text-sm font-medium text-muted-foreground">مستوى الثقة</p>
+                            <div className="flex items-center gap-2">
+                              <div className="flex-1 bg-gray-200 rounded-full h-2">
+                                <div 
+                                  className="bg-blue-500 h-2 rounded-full transition-all"
+                                  style={{ width: `${selectedDocument.confidence * 100}%` }}
+                                />
+                              </div>
+                              <span className="text-sm font-medium">
+                                {(selectedDocument.confidence * 100).toFixed(1)}%
+                              </span>
+                            </div>
+                          </div>
+                        )}
+                        {selectedDocument.processingTime && (
+                          <div>
+                            <p className="text-sm font-medium text-muted-foreground">وقت المعالجة</p>
+                            <p className="text-sm">{(selectedDocument.processingTime / 1000).toFixed(2)} ثانية</p>
+                          </div>
+                        )}
+                        {/* Annotation stats */}
+                        {selectedDocument.annotations && selectedDocument.annotations.length > 0 && (
+                          <div>
+                            <p className="text-sm font-medium text-muted-foreground">التعليقات التوضيحية</p>
+                            <div className="flex items-center gap-2">
+                              <Tag className="h-4 w-4" />
+                              <p className="text-sm">{selectedDocument.annotations.length} تعليق</p>
+                            </div>
+                          </div>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                )}
+
+                    {/* Metadata */}
+                    {selectedDocument.metadata && Object.keys(selectedDocument.metadata).length > 0 && (
+                      <div>
+                        <h3 className="text-lg font-medium mb-3">البيانات الوصفية</h3>
+                        <div className="bg-gray-50 rounded-lg p-4">
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            {Object.entries(selectedDocument.metadata).map(([key, value]) => (
+                              <div key={key} className="flex flex-col">
+                                <span className="text-xs font-medium text-muted-foreground uppercase">
+                                  {key}
+                                </span>
+                                <span className="text-sm mt-1">
+                                  {Array.isArray(value) ? value.join(', ') : String(value)}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Errors */}
+                    {selectedDocument.errors && selectedDocument.errors.length > 0 && (
+                      <div>
+                        <h3 className="text-lg font-medium mb-3 text-red-600">الأخطاء</h3>
+                        <div className="space-y-2">
+                          {selectedDocument.errors.map((error, index) => (
+                            <div key={index} className="p-3 bg-red-50 border border-red-200 rounded-lg">
+                              <p className="text-sm text-red-800">{error}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </TabsContent>
+
+                  <TabsContent value="chunks" className="space-y-4">
+                    {/* Chunks */}
+                    {selectedDocument.chunks && selectedDocument.chunks.length > 0 ? (
+                      <div>
+                        <div className="flex items-center justify-between mb-3">
+                          <h3 className="text-lg font-medium">
+                            مقاطع المحتوى ({selectedDocument.chunks.length})
+                          </h3>
+                          <Button size="sm" variant="outline" className="gap-2">
+                            <Database className="h-4 w-4" />
+                            حفظ في قاعدة البيانات
+                          </Button>
+                        </div>
+                        <ScrollArea className="h-96">
+                          <div className="space-y-3">
+                            {selectedDocument.chunks.map((chunk, index) => (
+                              <div key={index} className="border rounded-lg p-3">
+                                <div className="flex items-center justify-between mb-2">
+                                  <span className="text-sm font-medium text-muted-foreground">
+                                    مقطع {index + 1}
+                                  </span>
+                                  {onEditChunk && (
+                                    <Button 
+                                      size="sm" 
+                                      variant="ghost"
+                                      className="gap-2"
+                                      onClick={() => {
+                                        const newContent = prompt('تحرير المقطع:', chunk);
+                                        if (newContent && newContent !== chunk) {
+                                          onEditChunk(selectedDocument.id, index, newContent);
+                                        }
+                                      }}
+                                    >
+                                      <Edit className="h-3 w-3" />
+                                      تحرير
+                                    </Button>
+                                  )}
+                                </div>
+                                <p className="text-sm text-gray-700 leading-relaxed">
+                                  {chunk}
+                                </p>
+                              </div>
+                            ))}
+                          </div>
+                        </ScrollArea>
+                      </div>
+                    ) : (
+                      <div className="text-center py-12 text-muted-foreground">
+                        <Hash className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                        <p>لا توجد مقاطع محتوى متاحة</p>
+                      </div>
+                    )}
+                  </TabsContent>
+
+                  <TabsContent value="annotations" className="space-y-4">
+                    <AnnotationViewer
+                      annotations={selectedDocument.annotations}
+                      legalStructure={selectedDocument.legalStructure}
+                      boundingBoxes={selectedDocument.boundingBoxes}
+                      extractedText={selectedDocument.extractedText}
+                    />
+                  </TabsContent>
+
+                  <TabsContent value="text" className="space-y-4">
+                    {selectedDocument.extractedText ? (
+                      <div>
+                        <h3 className="text-lg font-medium mb-3">النص المستخرج</h3>
+                        <ScrollArea className="h-96">
+                          <div className="p-4 bg-gray-50 rounded-lg">
+                            <pre className="text-sm whitespace-pre-wrap font-mono">
+                              {selectedDocument.extractedText}
+                            </pre>
+                          </div>
+                        </ScrollArea>
+                      </div>
+                    ) : (
+                      <div className="text-center py-12 text-muted-foreground">
+                        <FileText className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                        <p>لا يوجد نص مستخرج متاح</p>
+                      </div>
+                    )}
+                  </TabsContent>
+                </Tabs>
               </div>
             ) : (
               <div className="text-center py-12 text-muted-foreground">

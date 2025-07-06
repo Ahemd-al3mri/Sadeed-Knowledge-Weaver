@@ -21,6 +21,23 @@ export async function runOcr(fileDataUri: string) {
   }
 }
 
+export async function runEnhancedOcr(fileDataUri: string, documentType?: string) {
+  try {
+    const result = await ocrProcessing({ 
+      fileDataUri, 
+      enableAnnotations: true, 
+      documentType 
+    });
+    if (!result.extractedText) {
+      throw new Error('OCR process returned no text.');
+    }
+    return result;
+  } catch (e) {
+    console.error('Enhanced OCR Processing failed:', e);
+    throw new Error('Failed to extract text and annotations from the document.');
+  }
+}
+
 export async function runDocTypeIdentification(documentText: string) {
   try {
     const result = await identifyDocumentType({ documentText });

@@ -37,12 +37,18 @@ export interface ProcessedDocument {
   metadata?: Record<string, any>;
   processingTime?: number;
   errors?: string[];
+  // Enhanced with annotation support
+  annotations?: any[];
+  legalStructure?: any;
+  boundingBoxes?: any[];
+  extractedText?: string;
 }
 
 export function EnhancedDocumentProcessor() {
   const [documents, setDocuments] = useState<ProcessedDocument[]>([]);
   const [selectedDocId, setSelectedDocId] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [enableAnnotations, setEnableAnnotations] = useState(true); // Enable by default for better extraction
   const [activeTab, setActiveTab] = useState('upload');
   const { toast } = useToast();
 
@@ -105,21 +111,40 @@ export function EnhancedDocumentProcessor() {
 
       // First, perform OCR if this is an image or PDF
       let extractedText = '';
+      let annotations: any[] = [];
+      let legalStructure: any = {};
+      let boundingBoxes: any[] = [];
       const fileType = doc.file.type;
       
       if (fileType.startsWith('image/') || fileType === 'application/pdf') {
         // Import OCR function dynamically to avoid server-side issues
-        const { runOcr } = await import('@/lib/actions');
+        const { runOcr, runEnhancedOcr } = await import('@/lib/actions');
         
         setDocuments(prev => prev.map(d => 
           d.id === docId ? { 
             ...d, 
-            statusMessage: 'جاري استخراج النص من المستند...' 
+            statusMessage: enableAnnotations 
+              ? 'جاري استخراج النص والبيانات المهيكلة من المستند...' 
+              : 'جاري استخراج النص من المستند...' 
           } : d
         ));
         
-        const ocrResult = await runOcr(dataUri);
-        extractedText = ocrResult.extractedText;
+        if (enableAnnotations) {
+          const ocrResult = await runEnhancedOcr(dataUri);
+          extractedText = ocrResult.extractedText;
+          annotations = ocrResult.annotations || [];
+          legalStructure = ocrResult.legalStructure || {};
+          boundingBoxes = ocrResult.boundingBoxes || [];
+          
+          console.log('Enhanced OCR completed:');
+          console.log('- Text length:', extractedText.length);
+          console.log('- Annotations:', annotations.length);
+          console.log('- Legal structure elements:', Object.keys(legalStructure).length);
+          console.log('- Bounding boxes:', boundingBoxes.length);
+        } else {
+          const ocrResult = await runOcr(dataUri);
+          extractedText = ocrResult.extractedText;
+        }
         
         if (!extractedText || extractedText.trim().length < 10) {
           throw new Error('لم يتم استخراج نص كافٍ من المستند. يرجى التأكد من جودة الصورة أو الملف.');
@@ -187,11 +212,17 @@ export function EnhancedDocumentProcessor() {
           classification: docTypeResult.documentType,
           confidence: docTypeResult.confidence,
           chunks: chunks,
+          extractedText: extractedText,
+          annotations: enableAnnotations ? annotations : undefined,
+          legalStructure: enableAnnotations ? legalStructure : undefined,
+          boundingBoxes: enableAnnotations ? boundingBoxes : undefined,
           metadata: {
             ...metadataResult,
             processingTime,
             ocrConfidence: 0.95,
-            chunksCount: chunks.length
+            chunksCount: chunks.length,
+            annotationsCount: annotations.length,
+            hasLegalStructure: Object.keys(legalStructure).length > 0
           },
           processingTime
         } : d
@@ -356,17 +387,39 @@ export function EnhancedDocumentProcessor() {
             <CardHeader>
               <CardTitle>رفع المستندات</CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-4">
+              {/* Annotation Settings */}
+              <div className="flex items-center justify-between p-4 border rounded-lg bg-blue-50">
+                <div>
+                  <h3 className="font-medium">الاستخراج المهيكل للبيانات</h3>
+                  <p className="text-sm text-muted-foreground">
+                    تفعيل استخراج البيانات المهيكلة والتعليقات التوضيحية من المستندات القانونية
+                  </p>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    id="annotation-toggle"
+                    checked={enableAnnotations}
+                    onChange={(e) => setEnableAnnotations(e.target.checked)}
+                    className="toggle-checkbox"
+                  />
+                  <label htmlFor="annotation-toggle" className="text-sm font-medium">
+                    {enableAnnotations ? 'مفعل' : 'معطل'}
+                  </label>
+                </div>
+              </div>
+
               <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center">
                 <Upload className="h-12 w-12 mx-auto text-gray-400 mb-4" />
                 <p className="text-lg mb-2">اسحب الملفات هنا أو انقر لاختيارها</p>
                 <p className="text-sm text-muted-foreground mb-4">
-                  يدعم ملفات PDF, DOC, DOCX, TXT
+                  يدعم ملفات PDF, DOC, DOCX, TXT, صور المستندات
                 </p>
                 <input
                   type="file"
                   multiple
-                  accept=".pdf,.doc,.docx,.txt"
+                  accept=".pdf,.doc,.docx,.txt,.jpg,.jpeg,.png,.tiff,.bmp"
                   onChange={(e) => handleFileUpload(e.target.files)}
                   className="hidden"
                   id="file-upload"
